@@ -1,0 +1,17 @@
+:host {
+  display: block;
+}
+
+.scroll-hidden {
+  /* Hide scrollbar for IE, Edge, and Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+
+  /* Hide scrollbar for WebKit browsers (Chrome, Safari, and Opera) */
+  overflow: -moz-scrollbars-none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-hidden::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
