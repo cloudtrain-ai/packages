@@ -5,7 +5,6 @@
   "keywords": [
     "CloudTrain"
   ],
-  "author": "Ramon Malcolm <ramonmalcolm10@gmail.com>",
   "homepage": "https://cloudtrain.ai",
   "license": "ISC",
   "main": "dist/index.js",

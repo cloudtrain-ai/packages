@@ -2,6 +2,10 @@
   "name": "@cloudtrain/chatbot",
   "version": "0.0.4",
   "description": "CloudTrain Chatbot Web Component",
+  "keywords": [
+    "CloudTrain"
+  ],
+  "homepage": "https://cloudtrain.ai",
   "main": "dist/index.cjs.js",
   "module": "dist/index.js",
   "types": "dist/types/index.d.ts",

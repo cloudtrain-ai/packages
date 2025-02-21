@@ -47,6 +47,6 @@ export const config: Config = {
     reloadStrategy: 'pageReload'
   },
   testing: {
-    browserHeadless: true,
+    browserHeadless: "shell",
   },
 };
