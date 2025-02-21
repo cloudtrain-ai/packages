@@ -1,4 +1,5 @@
 import { Config } from '@stencil/core';
+import { reactOutputTarget } from '@stencil/react-output-target';
 import tailwind, { PluginConfigOpts, PluginOpts, type TailwindConfig, tailwindHMR } from 'stencil-tailwind-plugin';
 import cfg from './tailwind.config';
 
@@ -34,6 +35,9 @@ export const config: Config = {
       type: 'www',
       serviceWorker: null, // disable service workers
     },
+    reactOutputTarget({
+      outDir: '../chatbot-react/lib/components/stencil-generated/',
+    }),
   ],
   plugins: [
     tailwind(opts),
@@ -43,6 +47,6 @@ export const config: Config = {
     reloadStrategy: 'pageReload'
   },
   testing: {
-    browserHeadless: "new",
+    browserHeadless: true,
   },
 };

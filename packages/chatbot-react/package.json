@@ -1,0 +1,32 @@
+{
+  "name": "@cloudtrain/chatbot-react",
+  "version": "0.0.4",
+  "description": "CloudTrain Chatbot Web Component React Wrapper",
+  "keywords": [
+    "CloudTrain"
+  ],
+  "author": "Ramon Malcolm <ramonmalcolm10@gmail.com>",
+  "homepage": "https://cloudtrain.ai",
+  "license": "ISC",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "node ./__tests__/cloudtrain-chatbot-react.test.js",
+    "build": "npm run tsc",
+    "tsc": "tsc -p . --outDir ./dist"
+  },
+  "dependencies": {
+    "@stencil/react-output-target": "^0.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
