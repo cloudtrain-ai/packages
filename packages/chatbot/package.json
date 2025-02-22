@@ -1,6 +1,6 @@
 {
   "name": "@cloudtrain/chatbot",
-  "version": "0.0.4",
+  "version": "0.0.20",
   "description": "CloudTrain Chatbot Web Component",
   "keywords": [
     "CloudTrain"
@@ -29,11 +29,18 @@
       "import": "./loader/index.js",
       "require": "./loader/index.cjs",
       "types": "./loader/index.d.ts"
+    },
+    "./hydrate": {
+      "types": "./hydrate/index.d.ts",
+      "import": "./hydrate/index.js",
+      "require": "./hydrate/index.cjs.js",
+      "default": "./hydrate/index.js"
     }
   },
   "files": [
     "dist/",
-    "loader/"
+    "loader/",
+    "hydrate/"
   ],
   "scripts": {
     "build": "stencil build",

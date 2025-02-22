@@ -1,4 +1,4 @@
-import { Component, Prop, State, h } from '@stencil/core';
+import { Component, Prop, State, Watch, h } from '@stencil/core';
 import { cn } from '../../utils/utils';
 import Button from './components/button';
 import X from './components/x';
@@ -42,6 +42,8 @@ const chatConfig = {
 export class CloudTrainChatbot {
   @Prop() apiKey!: string;
   @Prop() chatSuggestions: string[] = [];
+  @Prop() theme: 'light' | 'dark' | 'system' = 'system';
+  @State() activeTheme: 'light' | 'dark';
   @State() private isOpen = false;
   @State() private isAtBottom = false;
   @State() private isScrollable = false;
@@ -50,6 +52,19 @@ export class CloudTrainChatbot {
   @State() private messages: Message[] = [];
 
   private messagesRef: HTMLDivElement | null = null;
+
+  private getTheme(theme: 'light' | 'dark' | 'system') {
+    return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
+  }
+
+  componentWillLoad() {
+    this.activeTheme = this.getTheme(this.theme);
+  }
+
+  @Watch('theme')
+  watchThemeChange(newValue: 'light' | 'dark' | 'system' = 'system') {
+    this.activeTheme = this.getTheme(newValue);
+  }
 
   private toggleChat = () => {
     this.isOpen = !this.isOpen;
@@ -152,11 +167,11 @@ export class CloudTrainChatbot {
 
   render() {
     return (
-      <div class="flex h-screen w-full max-w-3xl flex-col items-center mx-auto py-6">
-        <div class={cn(`fixed ${chatConfig.positions['bottom-right']} z-50`)}>
+      <div class={this.activeTheme === 'dark' ? 'dark' : ''}>
+        <div class={`fixed ${chatConfig.positions['bottom-right']} z-50`}>
           <div
             class={cn(
-              'flex flex-col bg-background border sm:rounded-lg shadow-md overflow-hidden transition-all duration-250 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full h-full sm:inset-auto',
+              'flex flex-col bg-background dark:bg-background-dark border sm:rounded-lg shadow-md overflow-hidden transition-all duration-250 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full h-full sm:inset-auto',
               chatConfig.chatPositions['bottom-right'],
               chatConfig.dimensions['md'],
               this.isOpen ? chatConfig.states.open : chatConfig.states.closed,
@@ -184,28 +199,43 @@ export class CloudTrainChatbot {
                     <Button
                       variant="outline"
                       onClick={this.scrollToBottom}
-                      class="rounded-full h-[30px] w-[30px] p-1 border border-gray-200 dark:border-gray-700 bg-gray-900 dark:bg-gray-100 flex justify-center items-center"
+                      class="rounded-full h-[30px] w-[30px] p-1 border border-border dark:border-border-dark bg-background dark:bg-background-dark flex justify-center items-center"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="text-white dark:text-gray-700 size-3">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                        class="text-primary dark:text-primary-dark size-3"
+                      >
                         <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                       </svg>
                     </Button>
                   </div>
                 )}
                 <div class="px-4 py-4">
-                  <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background">
+                  <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background dark:bg-background-dark">
                     <Input
                       value={this.input}
                       onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                       placeholder="Type your message here..."
-                      class="max-h-12 px-4 py-3 bg-background text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg bg-white dark:bg-black dark:text-gray-100 border-0 p-3 focus:outline-0"
+                      class="max-h-12 px-4 py-3 text-sm focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0 text-primary dark:text-primary-dark"
                     />
                     <Button
+                      variant="ghost"
                       disabled={!this.input || this.isLoading}
                       type="submit"
-                      class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute -right-1 top-1 disabled:opacity-50"
+                      class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute right-1 top-1 disabled:opacity-50"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                        class="size-5 text-primary dark:text-primary-dark"
+                      >
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -218,32 +248,40 @@ export class CloudTrainChatbot {
                 <ChatFooter />
               </div>
             ) : (
-              <div class="px-4 pt-4 flex flex-col justify-end gap-4 h-full w-full relative dark:bg-black">
-                <h4 class="text-[16px] text-center dark:text-gray-100">How can I help you today?</h4>
+              <div class="px-4 pt-4 flex flex-col justify-end gap-4 h-full w-full relative">
+                <h4 class="text-[16px] text-center text-primary dark:text-primary-dark">How can I help you today?</h4>
 
                 <div class="w-full overflow-x-auto scroll-hidden">
                   <div class="flex items-center gap-2 sm:gap-6 whitespace-nowrap">
                     {this.chatSuggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => this.startChatWithSuggestion(suggestion)}
-                        class="border border-gray-200 text-[14px] sm:text-[16px] font-semibold cursor-pointer dark:text-gray-100 dark:hover:text-black hover:bg-gray-100 shadow-sm rounded-lg py-2 sm:py-3 min-w-[150px] flex justify-center items-center"
-                      >
+                      <Button variant="outline" key={index} onClick={() => this.startChatWithSuggestion(suggestion)}>
                         {suggestion}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
 
-                <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background mt-2">
+                <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background dark:bg-background-dark mt-2">
                   <Input
                     value={this.input}
                     onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                     placeholder="Type your message here..."
-                    class="max-h-12 px-4 py-3 bg-background text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg bg-white dark:bg-black dark:text-gray-100 border-0 p-3 focus:outline-0"
+                    class="max-h-12 px-4 py-3 text-sm focus-visible:outline-none focus-visible:ring-ring dark:focus-visible:ring-ring-dark disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg text-primary dark:text-primary-dark border-0 p-3 focus:outline-0"
                   />
-                  <Button disabled={!this.input || this.isLoading} type="submit" class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute -right-1 top-1 disabled:opacity-50">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                  <Button
+                    variant="ghost"
+                    disabled={!this.input || this.isLoading}
+                    type="submit"
+                    class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute right-1 top-1 disabled:opacity-50"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      class="size-5 text-primary dark:text-primary-dark"
+                    >
                       <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
                     </svg>
                   </Button>
@@ -253,17 +291,10 @@ export class CloudTrainChatbot {
             )}
 
             <Button variant="ghost" size="icon" class="absolute top-2 right-2 !flex sm:!hidden" onClick={this.toggleChat}>
-              <X className="h-4 w-4 text-gray-800 dark:text-white" />
+              <X className="h-4 w-4 text-primary dark:text-primary-dark" />
             </Button>
           </div>
-          <Button
-            variant="default"
-            onClick={this.toggleChat}
-            class={cn(
-              'w-14 h-14 rounded-full shadow-md items-center justify-center hover:shadow-lg hover:shadow-black/30 transition-all duration-300',
-              this.isOpen ? '!hidden sm:!flex' : 'flex',
-            )}
-          >
+          <Button variant="default" onClick={this.toggleChat} class={cn('w-14 h-14 rounded-full items-center justify-center', this.isOpen ? '!hidden sm:!flex' : 'flex')}>
             {this.isOpen ? (
               <X className="h-6 w-6" />
             ) : (
