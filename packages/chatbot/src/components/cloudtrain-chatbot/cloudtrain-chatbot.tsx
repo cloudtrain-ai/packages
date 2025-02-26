@@ -6,6 +6,7 @@ import ChatBubble from './chat-bubble';
 import ChatFooter from './chat-footer';
 import { Input } from './input';
 import { marked } from 'marked';
+import { ClickOutside } from 'stencil-click-outside';
 
 type Message = {
   content: string;
@@ -64,6 +65,13 @@ export class CloudTrainChatbot {
   @Watch('theme')
   watchThemeChange(newValue: 'light' | 'dark' | 'system' = 'system') {
     this.activeTheme = this.getTheme(newValue);
+  }
+
+  @ClickOutside()
+  closeOnClickOutside() {
+    if (this.isOpen) {
+      this.toggleChat();
+    }
   }
 
   private toggleChat = () => {
@@ -195,21 +203,14 @@ export class CloudTrainChatbot {
                   )}
                 </div>
                 {/* Scroll to bottom button */}
-                {this.isScrollable && !this.isAtBottom  && (
+                {this.isScrollable && !this.isAtBottom && (
                   <div class="absolute bottom-[100px] left-1/2 transform -translate-x-1/2 z-[99]">
                     <Button
                       variant="default"
                       onClick={this.scrollToBottom}
                       class="rounded-full h-[30px] w-[30px] p-1 border border-border dark:border-border-dark flex justify-center items-center"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        class="size-3"
-                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-3">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                       </svg>
                     </Button>
