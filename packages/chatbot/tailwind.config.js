@@ -44,5 +44,11 @@ module.exports = {
       },
     },
   },
+  safelist: [
+    'bg-primary',
+    'dark:bg-primary-dark',
+    'text-primary-foreground',
+    'dark:text-primary-foreground-dark'
+  ],
   plugins: [],
 };

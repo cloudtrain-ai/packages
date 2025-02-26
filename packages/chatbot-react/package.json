@@ -1,6 +1,6 @@
 {
   "name": "@cloudtrain/chatbot-react",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "description": "CloudTrain Chatbot Web Component React Wrapper",
   "keywords": [
     "CloudTrain"
@@ -23,7 +23,7 @@
     "tsc": "tsc -p . --outDir ./dist"
   },
   "dependencies": {
-    "@cloudtrain/chatbot": "0.0.31",
+    "@cloudtrain/chatbot": "0.0.32",
     "@stencil/react-output-target": "^0.8.2"
   },
   "devDependencies": {
