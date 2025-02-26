@@ -1,5 +1,5 @@
 import { Fragment, h } from '@stencil/core';
-import { cn } from '../../../utils/utils';
+import { cn } from '../../utils/utils';
 import { cva } from 'class-variance-authority';
 import MessageLoading from './message-loading';
 //import Button from './button';

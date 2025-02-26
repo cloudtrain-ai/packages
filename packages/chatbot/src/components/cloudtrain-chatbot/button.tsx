@@ -1,7 +1,7 @@
 import { h } from '@stencil/core';
 import { type JSXBase, type VNode } from '@stencil/core/internal';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../../utils/utils';
+import { cn } from '../../utils/utils';
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background dark:ring-offset-background-dark transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring dark:focus-visible:ring-ring-dark focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer',

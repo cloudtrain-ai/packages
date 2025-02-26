@@ -8,6 +8,10 @@ import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
 export namespace Components {
     interface CloudtrainChatbot {
         "apiKey": string;
+        /**
+         * @deprecated use camelCase instead. Support for dash-casing will be removed in Stencil v5.
+         */
+        "api-key"?: string;
         "chatSuggestions": string[];
         "theme": 'light' | 'dark' | 'system';
     }
@@ -26,6 +30,10 @@ declare global {
 declare namespace LocalJSX {
     interface CloudtrainChatbot {
         "apiKey": string;
+        /**
+         * @deprecated use camelCase instead. Support for dash-casing will be removed in Stencil v5.
+         */
+        "api-key"?: string;
         "chatSuggestions"?: string[];
         "theme"?: 'light' | 'dark' | 'system';
     }

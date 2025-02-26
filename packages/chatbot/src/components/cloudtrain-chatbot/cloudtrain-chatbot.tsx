@@ -1,10 +1,10 @@
 import { Component, Prop, State, Watch, h } from '@stencil/core';
 import { cn } from '../../utils/utils';
-import Button from './components/button';
-import X from './components/x';
-import ChatBubble from './components/chat-bubble';
-import ChatFooter from './components/chat-footer';
-import { Input } from './components/input';
+import Button from './/button';
+import X from './x';
+import ChatBubble from './chat-bubble';
+import ChatFooter from './chat-footer';
+import { Input } from './input';
 import { marked } from 'marked';
 
 type Message = {
@@ -68,6 +68,7 @@ export class CloudTrainChatbot {
 
   private toggleChat = () => {
     this.isOpen = !this.isOpen;
+    document.body.style.overflow = this.isOpen ? 'hidden' : 'auto';
   };
 
   private handleScroll = () => {
@@ -194,12 +195,12 @@ export class CloudTrainChatbot {
                   )}
                 </div>
                 {/* Scroll to bottom button */}
-                {this.isScrollable && !this.isAtBottom && (
+                {this.isScrollable && !this.isAtBottom  && (
                   <div class="absolute bottom-[100px] left-1/2 transform -translate-x-1/2 z-[99]">
                     <Button
-                      variant="outline"
+                      variant="default"
                       onClick={this.scrollToBottom}
-                      class="rounded-full h-[30px] w-[30px] p-1 border border-border dark:border-border-dark bg-background dark:bg-background-dark flex justify-center items-center"
+                      class="rounded-full h-[30px] w-[30px] p-1 border border-border dark:border-border-dark flex justify-center items-center"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -207,7 +208,7 @@ export class CloudTrainChatbot {
                         viewBox="0 0 24 24"
                         stroke-width="1.5"
                         stroke="currentColor"
-                        class="text-primary dark:text-primary-dark size-3"
+                        class="size-3"
                       >
                         <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                       </svg>
@@ -220,7 +221,7 @@ export class CloudTrainChatbot {
                       value={this.input}
                       onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                       placeholder="Type your message here..."
-                      class="max-h-12 px-4 py-3 text-sm focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0 text-primary dark:text-primary-dark"
+                      class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring dark:focus-visible:ring-ring-dark disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0 text-primary dark:text-primary-dark"
                     />
                     <Button
                       variant="ghost"
@@ -266,7 +267,7 @@ export class CloudTrainChatbot {
                     value={this.input}
                     onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                     placeholder="Type your message here..."
-                    class="max-h-12 px-4 py-3 text-sm focus-visible:outline-none focus-visible:ring-ring dark:focus-visible:ring-ring-dark disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg text-primary dark:text-primary-dark border-0 p-3 focus:outline-0"
+                    class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring dark:focus-visible:ring-ring-dark disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg text-primary dark:text-primary-dark border-0 p-3 focus:outline-0"
                   />
                   <Button
                     variant="ghost"
