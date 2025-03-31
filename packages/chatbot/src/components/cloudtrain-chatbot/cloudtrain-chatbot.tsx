@@ -292,11 +292,16 @@ export class CloudTrainChatbot {
               </div>
             )}
 
-            <Button variant="ghost" size="icon" class="absolute top-2 right-2 !flex sm:!hidden" onClick={this.toggleChat}>
+            <Button variant="ghost" size="icon" class="absolute top-2 right-2 !flex sm:!hidden" onClick={this.toggleChat} aria-label="Close chat">
               <X className="h-4 w-4 text-primary dark:text-primary-dark" />
             </Button>
           </div>
-          <Button variant="default" onClick={this.toggleChat} class={cn('w-14 h-14 rounded-full items-center justify-center', this.isOpen ? '!hidden sm:!flex' : 'flex')}>
+          <Button
+            variant="default"
+            onClick={this.toggleChat}
+            class={cn('w-14 h-14 rounded-full items-center justify-center', this.isOpen ? '!hidden sm:!flex' : 'flex')}
+            aria-label={this.isOpen ? 'Close chat' : 'Open chat'}
+          >
             {this.isOpen ? (
               <X className="h-6 w-6" />
             ) : (
