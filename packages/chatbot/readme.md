@@ -91,6 +91,7 @@ Here’s a full example of the chatbot integrated into an HTML page:
 | Attribute  | Type   | Required | Description                                     |
 |------------|--------|----------|-------------------------------------------------|
 | `api-key`  | String | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
+| `theme`         | "light" \| "dark" \| "system" \| undefined | ❌ No | Sets the chatbot theme. Defaults to system preference if undefined. |
 
 ### 🔹 Properties
 | Property           | Type       | Description                                   |
