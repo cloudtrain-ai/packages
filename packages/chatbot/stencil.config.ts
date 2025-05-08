@@ -1,20 +1,11 @@
 import { Config } from '@stencil/core';
 import { reactOutputTarget } from '@stencil/react-output-target';
-import tailwind, { PluginConfigOpts, PluginOpts, type TailwindConfig, tailwindHMR } from 'stencil-tailwind-plugin';
-import cfg from './tailwind.config';
+import tailwind, { tailwindHMR, setPluginConfigurationDefaults } from 'stencil-tailwind-plugin';
 
-const twConfigurationFn = (_: string, config: TailwindConfig): TailwindConfig => {
-  return {
-    ...config,
-    ...cfg
-  };
-};
-
-const opts = {
-  ...PluginOpts.DEFAULT,
-  tailwindConf: twConfigurationFn
-} satisfies PluginConfigOpts;
-
+setPluginConfigurationDefaults({
+  enableDebug: false,
+  tailwindCssPath: './src/styles/tailwind.css',
+});
 
 export const config: Config = {
   namespace: 'cloudtrain-chatbot',
@@ -45,7 +36,7 @@ export const config: Config = {
     },
   ],
   plugins: [
-    tailwind(opts),
+    tailwind(),
     tailwindHMR(),
   ],
   devServer: {

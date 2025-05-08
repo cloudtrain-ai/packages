@@ -1,4 +1,4 @@
-import { Component, Prop, State, Watch, h } from '@stencil/core';
+import { Component, Host, Prop, State, Watch, h } from '@stencil/core';
 import { cn } from '../../utils/utils';
 import Button from './/button';
 import X from './x';
@@ -44,6 +44,7 @@ export class CloudTrainChatbot {
   @Prop() apiKey!: string;
   @Prop() chatSuggestions: string[] = [];
   @Prop() theme: 'light' | 'dark' | 'system' = 'system';
+  @Prop() meta: Object;
   @State() activeTheme: 'light' | 'dark';
   @State() private isOpen = false;
   @State() private isAtBottom = false;
@@ -119,6 +120,7 @@ export class CloudTrainChatbot {
         body: JSON.stringify({
           message,
           chatHistory,
+          meta: this.meta,
         }),
       });
       this.isLoading = false;
@@ -176,11 +178,11 @@ export class CloudTrainChatbot {
 
   render() {
     return (
-      <div class={this.activeTheme === 'dark' ? 'dark' : ''}>
+      <Host data-theme={cn(this.activeTheme === 'dark' && 'dark')}>
         <div class={`fixed ${chatConfig.positions['bottom-right']} z-50`}>
           <div
             class={cn(
-              'flex flex-col bg-background dark:bg-background-dark border sm:rounded-lg shadow-md overflow-hidden transition-all duration-250 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full h-full sm:inset-auto',
+              'flex flex-col bg-background border sm:rounded-lg shadow-md overflow-hidden transition-all duration-250 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full h-full sm:inset-auto',
               chatConfig.chatPositions['bottom-right'],
               chatConfig.dimensions['md'],
               this.isOpen ? chatConfig.states.open : chatConfig.states.closed,
@@ -205,11 +207,7 @@ export class CloudTrainChatbot {
                 {/* Scroll to bottom button */}
                 {this.isScrollable && !this.isAtBottom && (
                   <div class="absolute bottom-[100px] left-1/2 transform -translate-x-1/2 z-[99]">
-                    <Button
-                      variant="default"
-                      onClick={this.scrollToBottom}
-                      class="rounded-full h-[30px] w-[30px] p-1 border border-border dark:border-border-dark flex justify-center items-center"
-                    >
+                    <Button variant="default" onClick={this.scrollToBottom} class="rounded-full h-[30px] w-[30px] p-1 border border-border flex justify-center items-center">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-3">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                       </svg>
@@ -217,12 +215,12 @@ export class CloudTrainChatbot {
                   </div>
                 )}
                 <div class="px-4 py-4">
-                  <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background dark:bg-background-dark">
+                  <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background">
                     <Input
                       value={this.input}
                       onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                       placeholder="Type your message here..."
-                      class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring dark:focus-visible:ring-ring-dark disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0 text-primary dark:text-primary-dark"
+                      class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0 text-primary"
                     />
                     <Button
                       variant="ghost"
@@ -230,14 +228,7 @@ export class CloudTrainChatbot {
                       type="submit"
                       class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute right-1 top-1 disabled:opacity-50"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        class="size-5 text-primary dark:text-primary-dark"
-                      >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-primary">
                         <path
                           stroke-linecap="round"
                           stroke-linejoin="round"
@@ -251,7 +242,7 @@ export class CloudTrainChatbot {
               </div>
             ) : (
               <div class="px-4 pt-4 flex flex-col justify-end gap-4 h-full w-full relative">
-                <h4 class="text-[16px] text-center text-primary dark:text-primary-dark">How can I help you today?</h4>
+                <h4 class="text-[16px] text-center text-primary">How can I help you today?</h4>
 
                 <div class="w-full overflow-x-auto scroll-hidden">
                   <div class="flex items-center gap-2 sm:gap-6 whitespace-nowrap">
@@ -263,12 +254,12 @@ export class CloudTrainChatbot {
                   </div>
                 </div>
 
-                <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background dark:bg-background-dark mt-2">
+                <form onSubmit={this.onSubmit} class="w-full relative rounded-lg border bg-background mt-2">
                   <Input
                     value={this.input}
                     onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                     placeholder="Type your message here..."
-                    class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring dark:focus-visible:ring-ring-dark disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg text-primary dark:text-primary-dark border-0 p-3 focus:outline-0"
+                    class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg text-primary border-0 p-3 focus:outline-0"
                   />
                   <Button
                     variant="ghost"
@@ -276,14 +267,7 @@ export class CloudTrainChatbot {
                     type="submit"
                     class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute right-1 top-1 disabled:opacity-50"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke-width="1.5"
-                      stroke="currentColor"
-                      class="size-5 text-primary dark:text-primary-dark"
-                    >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-primary">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
                     </svg>
                   </Button>
@@ -293,7 +277,7 @@ export class CloudTrainChatbot {
             )}
 
             <Button variant="ghost" size="icon" class="absolute top-2 right-2 !flex sm:!hidden" onClick={this.toggleChat} aria-label="Close chat">
-              <X className="h-4 w-4 text-primary dark:text-primary-dark" />
+              <X className="h-4 w-4 text-primary" />
             </Button>
           </div>
           <Button
@@ -315,7 +299,7 @@ export class CloudTrainChatbot {
             )}
           </Button>
         </div>
-      </div>
+      </Host>
     );
   }
 }

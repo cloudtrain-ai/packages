@@ -25,7 +25,7 @@ const chatBubbleMessageVariants = cva('px-2 py-1.5', {
   variants: {
     variant: {
       received: 'dark:bg-[#1f2937] bg-[#f3f4f6] dark:text-[#f9fafb] text-gray-800 rounded-r-lg rounded-tl-lg text-left',
-      sent: 'bg-background dark:bg-background-dark dark:text-primary-dark text-primary rounded-l-lg rounded-tr-lg text-right',
+      sent: 'bg-background text-primary rounded-l-lg rounded-tr-lg text-right',
     },
     layout: {
       default: '',
@@ -63,7 +63,7 @@ const ChatBubble = ({ message, isLoading = false }: { message: { content: string
             ) : (
               <pre class="whitespace-pre-wrap pt-2">
                 <div class="relative flex flex-col text-start">
-                  <div class="dark:bg-background-dark bg-background">{message.content}</div>
+                  <div class="bg-background">{message.content}</div>
                 </div>
               </pre>
             )}

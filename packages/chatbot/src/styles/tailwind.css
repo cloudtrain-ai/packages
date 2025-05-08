@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-background: hsl(var(--cloudtrain-background));
+  --color-foreground: hsl(var(--cloudtrain-foreground));
+  --color-border: hsl(var(--cloudtrain-border));
+  --color-primary: hsl(var(--cloudtrain-primary));
+  --color-primary-foreground: hsl(var(--cloudtrain-primary-foreground));
+  --color-input: hsl(var(--cloudtrain-input));
+  --color-muted-foreground: hsl(var(--cloudtrain-muted-foreground));
+  --color-ring: hsl(var(--cloudtrain-ring));
+  --color-accent: hsl(var(--cloudtrain-accent));
+  --color-accent-foreground: hsl(var(--cloudtrain-accent-foreground));
+}
+
+@layer base {
+  :host,
+  :root {
+    --cloudtrain-background: 0 0% 100%;
+    --cloudtrain-foreground: 240 10% 3.9%;
+    --cloudtrain-border: 240 5.9% 90%;
+    --cloudtrain-primary: 240 5.9% 10%;
+    --cloudtrain-primary-foreground: 0 0% 98%;
+    --cloudtrain-input: 240 5.9% 90%;
+    --cloudtrain-muted-foreground: 240 3.8% 46.1%;
+    --cloudtrain-ring: 240 10% 3.9%;
+    --cloudtrain-accent: 240 4.8% 95.9%;
+    --cloudtrain-accent-foreground: 240 5.9% 10%;
+  }
+  :host([data-theme='dark']) {
+    --cloudtrain-background: 240 10% 3.9%;
+    --cloudtrain-foreground: 0 0% 98%;
+    --cloudtrain-border: 240 3.7% 15.9%;
+    --cloudtrain-primary: 0 0% 98%;
+    --cloudtrain-primary-foreground: 240 5.9% 10%;
+    --cloudtrain-input: 240 3.7% 15.9%;
+    --cloudtrain-muted-foreground: 240 5% 64.9%;
+    --cloudtrain-ring: 240 4.9% 83.9%;
+    --cloudtrain-accent: 240 3.7% 15.9%;
+    --cloudtrain-accent-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  :host {
+    @apply border-border;
+    @apply bg-background text-foreground;
+  }
+}

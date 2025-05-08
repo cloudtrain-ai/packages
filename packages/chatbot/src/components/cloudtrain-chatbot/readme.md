@@ -7,11 +7,11 @@
 
 ## Properties
 
-| Property              | Attribute | Description | Type                            | Default     |
-| --------------------- | --------- | ----------- | ------------------------------- | ----------- |
-| `apiKey` _(required)_ | `api-key` |             | `string`                        | `undefined` |
-| `chatSuggestions`     | --        |             | `string[]`                      | `[]`        |
-| `theme`               | `theme`   |             | `"dark" \| "light" \| "system"` | `'system'`  |
+| Property              | Attribute          | Description | Type                            | Default     |
+| --------------------- | ------------------ | ----------- | ------------------------------- | ----------- |
+| `apiKey` _(required)_ | `api-key`          |             | `string`                        | `undefined` |
+| `chatSuggestions`     | `chat-suggestions` |             | `string[]`                      | `[]`        |
+| `theme`               | `theme`            |             | `"dark" \| "light" \| "system"` | `'system'`  |
 
 
 ----------------------------------------------

@@ -9,6 +9,7 @@ export namespace Components {
     interface CloudtrainChatbot {
         "apiKey": string;
         "chatSuggestions": string[];
+        "meta": Object;
         "theme": 'light' | 'dark' | 'system';
     }
 }
@@ -27,6 +28,7 @@ declare namespace LocalJSX {
     interface CloudtrainChatbot {
         "apiKey": string;
         "chatSuggestions"?: string[];
+        "meta"?: Object;
         "theme"?: 'light' | 'dark' | 'system';
     }
     interface IntrinsicElements {

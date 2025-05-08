@@ -70,14 +70,57 @@ If `theme` is set to `system`, it will adapt to the user's system preference.
 
 ---
 
+### 5️⃣ **Passing Meta Data**
+You can pass a custom `meta` object to the chatbot to provide additional context or metadata to the AI:
+
+```jsx
+<CloudtrainChatbot 
+  apiKey="YOUR_API_KEY_HERE"
+  meta={{ name: "John" }}
+/>
+```
+
+---
+
+### 6️⃣ **Customizing Colors**
+You can override the default color variables to customize the chatbot's appearance.
+
+Add CSS rules in your app targeting `:root` or the `cloudtrain-chatbot` tag:
+
+```css
+:root {
+  --cloudtrain-foreground: 0, 100%, 50%;
+}
+
+cloudtrain-chatbot[data-theme="dark"] {
+  --cloudtrain-foreground: 120, 100%, 50%;
+}
+```
+
+#### List of Overridable CSS Variables
+
+- `--cloudtrain-background`
+- `--cloudtrain-foreground`
+- `--cloudtrain-border`
+- `--cloudtrain-primary`
+- `--cloudtrain-primary-foreground`
+- `--cloudtrain-input`
+- `--cloudtrain-muted-foreground`
+- `--cloudtrain-ring`
+- `--cloudtrain-accent`
+- `--cloudtrain-accent-foreground`
+
+---
+
 ## 📌 API Reference
 
 ### 🔹 Props
 | Prop             | Type     | Required | Description                                    |
-|-----------------|----------|----------|------------------------------------------------|
-| `apiKey`        | String   | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
-| `chatSuggestions` | Array    | ❌ No   | An array of strings used as chatbot prompts. |
-| `theme`         | "light" \| "dark" \| "system" \| undefined | ❌ No | Sets the chatbot theme. Defaults to system preference if undefined. |
+|------------------|----------|----------|------------------------------------------------|
+| `apiKey`         | String   | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
+| `chatSuggestions`| Array    | ❌ No    | An array of strings used as chatbot prompts. |
+| `theme`          | "light" \| "dark" \| "system" \| undefined | ❌ No | Sets the chatbot theme. Defaults to system preference if undefined. |
+| `meta`           | Object   | ❌ No    | Custom metadata object passed to the AI model. |
 
 ---
 

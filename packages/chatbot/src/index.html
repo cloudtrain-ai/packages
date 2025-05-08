@@ -6,6 +6,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0" />
   <title>Stencil Component Starter</title>
 
+  <style>
+    body {
+      background-color: black;
+      color: white;
+    }
+  </style>
+
   <script type="module" src="/build/cloudtrain-chatbot.esm.js"></script>
   <script nomodule src="/build/cloudtrain-chatbot.js"></script>
 </head>
@@ -14,7 +21,13 @@
   <cloudtrain-chatbot api-key="key" theme="system"></cloudtrain-chatbot>
 
   <script>
-    document.querySelector('cloudtrain-chatbot').chatSuggestions = ['non-urgent', 'weekend-only', 'non-urgent', 'weekend-only'];
+    const chatbot = document.querySelector('cloudtrain-chatbot');
+    chatbot.chatSuggestions = ['non-urgent', 'weekend-only', 'non-urgent', 'weekend-only'];
+    chatbot.meta = {
+      name: "Alice",
+      userRole: "admin",
+      sessionId: "abc123"
+    };
   </script>
 </body>
 
