@@ -226,7 +226,7 @@ export class CloudTrainChatbot {
                       variant="ghost"
                       disabled={!this.input || this.isLoading}
                       type="submit"
-                      class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute right-1 top-1 disabled:opacity-50"
+                      class="absolute -right-1 top-1 disabled:opacity-50 hover:bg-transparent opacity-70 ring-offset-background transition-opacity hover:opacity-100"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-primary">
                         <path
@@ -265,7 +265,7 @@ export class CloudTrainChatbot {
                     variant="ghost"
                     disabled={!this.input || this.isLoading}
                     type="submit"
-                    class="ml-auto gap-1.5 w-[40px] h-[40px] rounded-full absolute right-1 top-1 disabled:opacity-50"
+                    class="absolute -right-1 top-1 disabled:opacity-50 hover:bg-transparent opacity-70 ring-offset-background transition-opacity hover:opacity-100"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-primary">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
@@ -276,9 +276,14 @@ export class CloudTrainChatbot {
               </div>
             )}
 
-            <Button variant="ghost" size="icon" class="absolute top-2 right-2 !flex sm:!hidden" onClick={this.toggleChat} aria-label="Close chat">
-              <X className="h-4 w-4" />
-            </Button>
+            <button
+              class="absolute right-1 top-2 rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+              onClick={this.toggleChat}
+              aria-label="Close chat"
+            >
+              <X className="h-5 w-5" />
+              <span class="sr-only">Close</span>
+            </button>
           </div>
           <Button
             variant="default"
