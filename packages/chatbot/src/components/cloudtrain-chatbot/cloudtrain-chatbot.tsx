@@ -283,7 +283,7 @@ export class CloudTrainChatbot {
           <Button
             variant="default"
             onClick={this.toggleChat}
-            class={cn('w-14 h-14 rounded-full items-center justify-center', this.isOpen ? '!hidden sm:!flex' : 'flex')}
+            class={cn('w-14 h-14 rounded-full items-center justify-center text-message-icon', this.isOpen ? '!hidden sm:!flex' : 'flex')}
             aria-label={this.isOpen ? 'Close chat' : 'Open chat'}
           >
             {this.isOpen ? (

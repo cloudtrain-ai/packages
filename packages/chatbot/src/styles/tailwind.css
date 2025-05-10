@@ -11,6 +11,7 @@
   --color-ring: hsl(var(--cloudtrain-ring));
   --color-accent: hsl(var(--cloudtrain-accent));
   --color-accent-foreground: hsl(var(--cloudtrain-accent-foreground));
+  --color-message-icon: hsl(var(--cloudtrain-message-icon));
 }
 
 @layer base {
@@ -26,6 +27,7 @@
     --cloudtrain-ring: 240 10% 3.9%;
     --cloudtrain-accent: 240 4.8% 95.9%;
     --cloudtrain-accent-foreground: 240 5.9% 10%;
+    --cloudtrain-message-icon: 0 0% 98%;
   }
   :host([data-theme='dark']) {
     --cloudtrain-background: 240 10% 3.9%;
@@ -38,6 +40,7 @@
     --cloudtrain-ring: 240 4.9% 83.9%;
     --cloudtrain-accent: 240 3.7% 15.9%;
     --cloudtrain-accent-foreground: 0 0% 98%;
+    --cloudtrain-message-icon: 240 5.9% 10%;
   }
 }
 

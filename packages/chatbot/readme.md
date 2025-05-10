@@ -142,16 +142,6 @@ Here’s a full example of the chatbot integrated into an HTML page:
 
 ---
 
-## 📜 License
-This project is licensed under the **MIT License**.
-
----
-
-💡 Need help? Contact support at [CloudTrain AI](https://cloudtrain.ai/). 🚀
-
-
----
-
 ## 🎨 Customizing Colors
 
 You can override the default theme colors used by the chatbot using CSS variables.  
@@ -183,3 +173,14 @@ You can override the following variables to customize the chatbot's appearance:
 - `--cloudtrain-ring`
 - `--cloudtrain-accent`
 - `--cloudtrain-accent-foreground`
+- `--cloudtrain-message-icon`
+
+## 📜 License
+This project is licensed under the **MIT License**.
+
+---
+
+💡 Need help? Contact support at [CloudTrain AI](https://cloudtrain.ai/). 🚀
+
+
+---

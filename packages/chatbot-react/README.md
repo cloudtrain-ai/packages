@@ -109,6 +109,7 @@ cloudtrain-chatbot[data-theme="dark"] {
 - `--cloudtrain-ring`
 - `--cloudtrain-accent`
 - `--cloudtrain-accent-foreground`
+- `--cloudtrain-message-icon`
 
 ---
 
