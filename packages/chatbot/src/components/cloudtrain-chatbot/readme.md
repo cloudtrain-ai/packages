@@ -11,6 +11,7 @@
 | --------------------- | ------------------ | ----------- | ------------------------------- | ----------- |
 | `apiKey` _(required)_ | `api-key`          |             | `string`                        | `undefined` |
 | `chatSuggestions`     | `chat-suggestions` |             | `string[]`                      | `[]`        |
+| `meta`                | `meta`             |             | `Object`                        | `undefined` |
 | `theme`               | `theme`            |             | `"dark" \| "light" \| "system"` | `'system'`  |
 
 

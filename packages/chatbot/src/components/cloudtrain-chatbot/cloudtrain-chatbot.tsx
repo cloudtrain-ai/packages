@@ -220,7 +220,7 @@ export class CloudTrainChatbot {
                       value={this.input}
                       onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                       placeholder="Type your message here..."
-                      class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0 text-primary"
+                      class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0"
                     />
                     <Button
                       variant="ghost"
@@ -242,7 +242,7 @@ export class CloudTrainChatbot {
               </div>
             ) : (
               <div class="px-4 pt-4 flex flex-col justify-end gap-4 h-full w-full relative">
-                <h4 class="text-[16px] text-center text-primary">How can I help you today?</h4>
+                <h4 class="text-[16px] text-center">How can I help you today?</h4>
 
                 <div class="w-full overflow-x-auto scroll-hidden">
                   <div class="flex items-center gap-2 sm:gap-6 whitespace-nowrap">
@@ -259,7 +259,7 @@ export class CloudTrainChatbot {
                     value={this.input}
                     onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
                     placeholder="Type your message here..."
-                    class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg text-primary border-0 p-3 focus:outline-0"
+                    class="max-h-12 px-4 py-3 focus-visible:outline-none focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 p-3 focus:outline-0"
                   />
                   <Button
                     variant="ghost"
@@ -277,7 +277,7 @@ export class CloudTrainChatbot {
             )}
 
             <Button variant="ghost" size="icon" class="absolute top-2 right-2 !flex sm:!hidden" onClick={this.toggleChat} aria-label="Close chat">
-              <X className="h-4 w-4 text-primary" />
+              <X className="h-4 w-4" />
             </Button>
           </div>
           <Button
