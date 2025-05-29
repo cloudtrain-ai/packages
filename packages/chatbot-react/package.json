@@ -1,6 +1,6 @@
 {
   "name": "@cloudtrain/chatbot-react",
-  "version": "0.0.50",
+  "version": "0.0.51",
   "description": "CloudTrain Chatbot Web Component React Wrapper",
   "keywords": [
     "CloudTrain"
@@ -24,8 +24,8 @@
     "publish-package": "npm publish --access public"
   },
   "dependencies": {
-    "@cloudtrain/chatbot": "0.0.50",
-    "@stencil/react-output-target": "^1.0.2"
+    "@cloudtrain/chatbot": "0.0.51",
+    "@stencil/react-output-target": "^1.0.3"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

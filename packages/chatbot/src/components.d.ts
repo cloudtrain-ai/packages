@@ -8,8 +8,14 @@ import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
 export namespace Components {
     interface CloudtrainChatbot {
         "apiKey": string;
+        /**
+          * @default []
+         */
         "chatSuggestions": string[];
         "meta": Object;
+        /**
+          * @default 'system'
+         */
         "theme": 'light' | 'dark' | 'system';
     }
 }
@@ -27,8 +33,14 @@ declare global {
 declare namespace LocalJSX {
     interface CloudtrainChatbot {
         "apiKey": string;
+        /**
+          * @default []
+         */
         "chatSuggestions"?: string[];
         "meta"?: Object;
+        /**
+          * @default 'system'
+         */
         "theme"?: 'light' | 'dark' | 'system';
     }
     interface IntrinsicElements {
