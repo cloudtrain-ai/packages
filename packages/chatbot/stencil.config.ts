@@ -29,6 +29,7 @@ export const config: Config = {
     reactOutputTarget({
       outDir: '../chatbot-react/lib/components/stencil-generated/',
       hydrateModule: '@cloudtrain/chatbot/hydrate',
+      clientModule: '@cloudtrain/chatbot/components',
     }),
     {
       type: 'dist-hydrate-script',

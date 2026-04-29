@@ -24,10 +24,10 @@
     "publish-package": "npm publish --access public"
   },
   "dependencies": {
-    "@cloudtrain/chatbot": "0.0.51",
+    "@cloudtrain/chatbot": "*",
     "@stencil/react-output-target": "^1.0.3"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^6.0.3"
   }
 }

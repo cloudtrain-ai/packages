@@ -1,0 +1,29 @@
+{
+    "name": "@cloudtrain/sdk",
+    "version": "0.1.0",
+    "description": "Official SDK for the CloudTrain API — build and interact with AI agents trained on your data.",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "type": "module",
+    "files": ["dist"],
+    "scripts": {
+        "build": "bun build src/index.ts --outdir dist --format esm && bun x tsc --emitDeclarationOnly --declaration --outDir dist"
+    },
+    "keywords": ["cloudtrain", "ai", "agent", "sdk", "chat", "api"],
+    "license": "MIT",
+    "homepage": "https://cloudtrain.ai",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/cloudtrain-ai/packages"
+    },
+    "devDependencies": {
+        "typescript": "^6.0.3"
+    }
+}

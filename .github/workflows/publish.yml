@@ -1,0 +1,59 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Set version from release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          for pkg in sdk chatbot chatbot-react; do
+            cd packages/$pkg
+            npm version "$VERSION" --no-git-tag-version
+            cd ../..
+          done
+
+      - name: Build SDK
+        run: bun run build
+        working-directory: packages/sdk
+
+      - name: Build Chatbot
+        run: bun run build
+        working-directory: packages/chatbot
+
+      - name: Build React Wrapper
+        run: bun run build
+        working-directory: packages/chatbot-react
+
+      - name: Publish SDK
+        run: npm publish --provenance --access public
+        working-directory: packages/sdk
+
+      - name: Publish Chatbot
+        run: npm publish --provenance --access public
+        working-directory: packages/chatbot
+
+      - name: Publish React Wrapper
+        run: npm publish --provenance --access public
+        working-directory: packages/chatbot-react

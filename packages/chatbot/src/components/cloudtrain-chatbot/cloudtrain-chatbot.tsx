@@ -7,6 +7,7 @@ import ChatFooter from './chat-footer';
 import { Input } from './input';
 import { marked } from 'marked';
 import { ClickOutside } from 'stencil-click-outside';
+import { CloudTrain } from '@cloudtrain/sdk';
 
 type Message = {
   content: string;
@@ -42,15 +43,18 @@ const chatConfig = {
 })
 export class CloudTrainChatbot {
   @Prop() apiKey!: string;
+  @Prop() baseUrl: string = 'https://cloudtrain.ai';
   @Prop() chatSuggestions: string[] = [];
   @Prop() theme: 'light' | 'dark' | 'system' = 'system';
-  @Prop() meta: Object;
-  @State() activeTheme: 'light' | 'dark';
+  @Prop() meta: Object = {};
+  @State() activeTheme: 'light' | 'dark' = 'light';
+
+  private client!: CloudTrain;
   @State() private isOpen = false;
   @State() private isAtBottom = false;
   @State() private isScrollable = false;
   @State() private isLoading = false;
-  @State() private input: string;
+  @State() private input: string = '';
   @State() private messages: Message[] = [];
 
   private messagesRef: HTMLDivElement | null = null;
@@ -61,6 +65,7 @@ export class CloudTrainChatbot {
 
   componentWillLoad() {
     this.activeTheme = this.getTheme(this.theme);
+    this.client = new CloudTrain({ apiKey: this.apiKey, baseUrl: this.baseUrl });
   }
 
   @Watch('theme')
@@ -90,6 +95,7 @@ export class CloudTrainChatbot {
   private scrollToBottom = () => {
     if (!this.messagesRef) return;
     setTimeout(() => {
+      if (!this.messagesRef) return;
       this.messagesRef.scrollTo({
         top: this.messagesRef.scrollHeight,
         behavior: 'smooth',
@@ -102,63 +108,33 @@ export class CloudTrainChatbot {
   private sendMessage = async (message: string) => {
     try {
       this.isLoading = true;
-      const chatHistory = this.messages;
-      this.messages = [
-        ...this.messages,
-        {
-          content: message,
-          role: 'user',
-        },
-      ];
+      this.messages = [...this.messages, { content: message, role: 'user' }];
       this.scrollToBottom();
-      const response = await fetch('https://cloudtrain.ai/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          message,
-          chatHistory,
-          meta: this.meta,
-        }),
-      });
-      this.isLoading = false;
 
-      if (!response.ok) {
-        throw new Error(`Error: ${response.statusText}`);
-      }
+      const messages = this.messages.map((m) => ({
+        role: (m.role === 'ai' ? 'assistant' : m.role) as 'user' | 'assistant',
+        content: m.content,
+      }));
 
-      // Ensure response body exists
-      if (!response.body) {
-        throw new Error('No response body available for streaming');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      const stream = this.client.chatStream({ messages, meta: this.meta as Record<string, unknown> });
       let result = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          const formattedResult = await marked.parse(result);
-          this.messages = [...this.messages.filter((_, index) => index !== this.messages.length - 1), { role: 'ai', content: formattedResult }];
-          break;
-        }
-
-        const chunk = decoder.decode(value, { stream: true });
+      for await (const chunk of stream) {
+        if (this.isLoading) this.isLoading = false;
         result += chunk;
 
         const lastMessage = this.messages[this.messages.length - 1];
 
         if (lastMessage.role === 'ai') {
-          lastMessage.content = result;
-          this.messages = [...this.messages.filter((_, index) => index !== this.messages.length - 1), lastMessage];
+          this.messages = [...this.messages.slice(0, -1), { role: 'ai', content: result }];
         } else {
-          this.messages.push({ role: 'ai', content: result });
+          this.messages = [...this.messages, { role: 'ai', content: result }];
         }
         this.scrollToBottom();
       }
+
+      const formattedResult = await marked.parse(result);
+      this.messages = [...this.messages.slice(0, -1), { role: 'ai', content: formattedResult }];
     } catch (error) {
     } finally {
       this.isLoading = false;
@@ -190,7 +166,7 @@ export class CloudTrainChatbot {
           >
             {this.messages.length ? (
               <div class="pt-8 sm:pt-0 flex flex-col justify-between h-full relative">
-                <div class="flex flex-col w-full h-full p-4 gap-6 overflow-y-auto" ref={elm => (this.messagesRef = elm)} onScroll={this.handleScroll}>
+                <div class="flex flex-col w-full h-full p-4 gap-6 overflow-y-auto" ref={elm => (this.messagesRef = elm ?? null)} onScroll={this.handleScroll}>
                   {this.messages.map(message => (
                     <ChatBubble message={message} />
                   ))}

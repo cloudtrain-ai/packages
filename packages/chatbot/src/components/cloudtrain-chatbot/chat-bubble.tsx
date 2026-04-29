@@ -41,17 +41,8 @@ const chatBubbleMessageVariants = cva('px-2 py-1.5', {
 const ChatBubble = ({ message, isLoading = false }: { message: { content: string; role: 'user' | 'ai' }; isLoading?: boolean }) => {
   return (
     <div class={cn(chatBubbleVariant({ variant: message.role === 'user' ? 'sent' : 'received' }), 'relative group')}>
-      {/* Avatar */}
-      {message.role === 'ai' && (
-        <div class="relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full">
-          {/*<img src="" alt="" class="aspect-square h-full w-full" />*/}
-          {/*<div class="flex h-full w-full items-center justify-center rounded-full dark:bg-[#1f2937] bg-[#f3f4f6]">{message.role === 'user' ? '👨🏽' : '🤖'}</div>*/}
-          <div class="flex h-full w-full items-center justify-center rounded-full dark:bg-[#1f2937] bg-[#f3f4f6]">🤖</div>
-        </div>
-      )}
-
       {/* Message */}
-      <div class={cn(chatBubbleMessageVariants({ variant: message.role === 'user' ? 'sent' : 'received' }), 'break-words max-w-full whitespace-pre-wrap')}>
+      <div class={cn(chatBubbleMessageVariants({ variant: message.role === 'user' ? 'sent' : 'received' }), 'break-words max-w-full')}>
         {isLoading ? (
           <div class="flex items-center space-x-2">
             <MessageLoading />
@@ -59,13 +50,9 @@ const ChatBubble = ({ message, isLoading = false }: { message: { content: string
         ) : (
           <Fragment>
             {message.role === 'ai' ? (
-              <pre class="whitespace-pre-wrap" style={{ whiteSpace: 'pre-wrap' }} innerHTML={message.content}></pre>
+              <div class="text-sm leading-relaxed [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:pl-4 [&>ul]:mb-2 [&>ol]:pl-4 [&>ol]:mb-2" innerHTML={message.content}></div>
             ) : (
-              <pre class="whitespace-pre-wrap pt-2">
-                <div class="relative flex flex-col text-start">
-                  <div class="bg-background">{message.content}</div>
-                </div>
-              </pre>
+              <div class="text-sm pt-1">{message.content}</div>
             )}
           </Fragment>
         )}
