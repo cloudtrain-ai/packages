@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@cloudtrain/chatbot": "*",
-    "@stencil/react-output-target": "^1.0.3"
+    "@stencil/react-output-target": "~1.0.3"
   },
   "devDependencies": {
     "typescript": "^6.0.3"
