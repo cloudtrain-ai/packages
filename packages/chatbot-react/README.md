@@ -32,7 +32,7 @@ import { CloudtrainChatbot } from "@cloudtrain/chatbot-react";
 function App() {
   return (
     <div>
-      <CloudtrainChatbot apiKey="YOUR_API_KEY_HERE" />
+      <CloudtrainChatbot api-key="YOUR_API_KEY_HERE" />
     </div>
   );
 }
@@ -42,6 +42,8 @@ export default App;
 
 Replace `YOUR_API_KEY_HERE` with the API key generated at [CloudTrain AI](https://cloudtrain.ai/).
 
+> **Note:** Props use kebab-case (e.g. `api-key`) to match the underlying web component attributes.
+
 ---
 
 ### 3️⃣ **Adding Chat Suggestions**
@@ -49,8 +51,8 @@ You can pass chat suggestions as a prop:
 
 ```jsx
 <CloudtrainChatbot 
-  apiKey="YOUR_API_KEY_HERE"
-  chatSuggestions={["How can I help you?", "Tell me more about your issue.", "What can I assist you with today?"]} 
+  api-key="YOUR_API_KEY_HERE"
+  chat-suggestions={["How can I help you?", "Tell me more about your issue.", "What can I assist you with today?"]} 
 />
 ```
 
@@ -61,7 +63,7 @@ You can specify a theme using the `theme` prop. Available options are `light`, `
 
 ```jsx
 <CloudtrainChatbot 
-  apiKey="YOUR_API_KEY_HERE"
+  api-key="YOUR_API_KEY_HERE"
   theme="dark"
 />
 ```
@@ -75,7 +77,7 @@ You can pass a custom `meta` object to the chatbot to provide additional context
 
 ```jsx
 <CloudtrainChatbot 
-  apiKey="YOUR_API_KEY_HERE"
+  api-key="YOUR_API_KEY_HERE"
   meta={{ name: "John" }}
 />
 ```
@@ -118,8 +120,9 @@ cloudtrain-chatbot[data-theme="dark"] {
 ### 🔹 Props
 | Prop             | Type     | Required | Description                                    |
 |------------------|----------|----------|------------------------------------------------|
-| `apiKey`         | String   | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
-| `chatSuggestions`| Array    | ❌ No    | An array of strings used as chatbot prompts. |
+| `api-key`        | String   | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
+| `base-url`       | String   | ❌ No    | Custom API base URL. Defaults to `https://cloudtrain.ai`. |
+| `chat-suggestions`| Array   | ❌ No    | An array of strings used as chatbot prompts. |
 | `theme`          | "light" \| "dark" \| "system" \| undefined | ❌ No | Sets the chatbot theme. Defaults to system preference if undefined. |
 | `meta`           | Object   | ❌ No    | Custom metadata object passed to the AI model. |
 
@@ -129,7 +132,7 @@ cloudtrain-chatbot[data-theme="dark"] {
 1. Go to [CloudTrain AI](https://cloudtrain.ai/).
 2. Create an AI model for your chatbot.
 3. Generate an API key for the model.
-4. Use the API key in the `apiKey` prop of the `CloudtrainChatbot` component.
+4. Use the API key in the `api-key` prop of the `CloudtrainChatbot` component.
 
 ---
 
