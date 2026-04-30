@@ -49,11 +49,17 @@ jobs:
       - name: Publish SDK
         run: npm publish --provenance --access public
         working-directory: packages/sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish Chatbot
         run: npm publish --provenance --access public
         working-directory: packages/chatbot
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish React Wrapper
         run: npm publish --provenance --access public
         working-directory: packages/chatbot-react
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
