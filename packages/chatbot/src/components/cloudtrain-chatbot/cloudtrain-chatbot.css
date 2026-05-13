@@ -2,6 +2,20 @@
   display: block;
 }
 
+@keyframes ct-fab-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--cloudtrain-primary) / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 12px hsl(var(--cloudtrain-primary) / 0);
+  }
+}
+
+.ct-fab-pulse {
+  animation: ct-fab-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+
 .scroll-hidden {
   /* Hide scrollbar for IE, Edge, and Firefox */
   -ms-overflow-style: none;  /* IE and Edge */

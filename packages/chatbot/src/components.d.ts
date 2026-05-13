@@ -8,22 +8,37 @@ import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
 export namespace Components {
     interface CloudtrainChatbot {
         "apiKey": string;
+        "avatarUrl"?: string;
         /**
           * @default 'https://cloudtrain.ai'
          */
         "baseUrl": string;
+        "botName"?: string;
         /**
           * @default []
          */
         "chatSuggestions": string[];
         /**
+          * @default false
+         */
+        "hideBranding": boolean;
+        /**
           * @default {}
          */
         "meta": Object;
         /**
+          * @default 'bottom-right'
+         */
+        "position": 'bottom-right' | 'bottom-left';
+        /**
           * @default 'system'
          */
         "theme": 'light' | 'dark' | 'system';
+        /**
+          * @default 'How can I help you today?'
+         */
+        "welcomeMessage": string;
+        "welcomeSubtitle"?: string;
     }
 }
 declare global {
@@ -40,22 +55,37 @@ declare global {
 declare namespace LocalJSX {
     interface CloudtrainChatbot {
         "apiKey": string;
+        "avatarUrl"?: string;
         /**
           * @default 'https://cloudtrain.ai'
          */
         "baseUrl"?: string;
+        "botName"?: string;
         /**
           * @default []
          */
         "chatSuggestions"?: string[];
         /**
+          * @default false
+         */
+        "hideBranding"?: boolean;
+        /**
           * @default {}
          */
         "meta"?: Object;
         /**
+          * @default 'bottom-right'
+         */
+        "position"?: 'bottom-right' | 'bottom-left';
+        /**
           * @default 'system'
          */
         "theme"?: 'light' | 'dark' | 'system';
+        /**
+          * @default 'How can I help you today?'
+         */
+        "welcomeMessage"?: string;
+        "welcomeSubtitle"?: string;
     }
     interface IntrinsicElements {
         "cloudtrain-chatbot": CloudtrainChatbot;

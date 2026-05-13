@@ -1,2 +1,2 @@
 export { CloudTrain, CloudTrainAPIError } from "./client";
-export type { Message, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError } from "./types";
+export type { Agent, Message, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError } from "./types";

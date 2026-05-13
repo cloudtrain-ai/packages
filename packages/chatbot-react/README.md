@@ -118,13 +118,19 @@ cloudtrain-chatbot[data-theme="dark"] {
 ## 📌 API Reference
 
 ### 🔹 Props
-| Prop             | Type     | Required | Description                                    |
-|------------------|----------|----------|------------------------------------------------|
-| `api-key`        | String   | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
-| `base-url`       | String   | ❌ No    | Custom API base URL. Defaults to `https://cloudtrain.ai`. |
-| `chat-suggestions`| Array   | ❌ No    | An array of strings used as chatbot prompts. |
-| `theme`          | "light" \| "dark" \| "system" \| undefined | ❌ No | Sets the chatbot theme. Defaults to system preference if undefined. |
-| `meta`           | Object   | ❌ No    | Custom metadata object passed to the AI model. |
+| Prop              | Type     | Required | Description                                    |
+|-------------------|----------|----------|------------------------------------------------|
+| `api-key`         | String   | ✅ Yes   | The API key generated on [CloudTrain AI](https://cloudtrain.ai/). |
+| `base-url`        | String   | ❌ No    | Custom API base URL. Defaults to `https://cloudtrain.ai`. |
+| `chat-suggestions`| Array    | ❌ No    | An array of strings used as chatbot prompts. |
+| `theme`           | "light" \| "dark" \| "system" | ❌ No | Sets the chatbot theme. Defaults to system preference. |
+| `meta`            | Object   | ❌ No    | Custom metadata object passed to the AI model. |
+| `hide-branding`   | Boolean  | ❌ No    | Hides the "Powered by CloudTrain" footer. Defaults to `false`. |
+| `bot-name`        | String   | ❌ No    | Overrides the agent name shown in the header. Falls back to the value fetched from the agent endpoint, then `"AI Assistant"`. |
+| `avatar-url`      | String   | ❌ No    | Overrides the agent avatar image. Falls back to the agent's `logo` from the API, then a default chat icon. |
+| `welcome-message` | String   | ❌ No    | Heading shown in the empty state. Defaults to `"How can I help you today?"`. |
+| `welcome-subtitle`| String   | ❌ No    | Subline shown under the heading. When unset, automatically adapts based on whether `chat-suggestions` is provided. |
+| `position`        | "bottom-right" \| "bottom-left" | ❌ No | Corner of the viewport where the FAB and panel anchor. Defaults to `bottom-right`. |
 
 ---
 
