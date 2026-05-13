@@ -33,6 +33,9 @@ jobs:
             npm version "$VERSION" --no-git-tag-version --allow-same-version
             cd ../..
           done
+          # Pin internal cross-package deps to the release version (replaces "*")
+          sed -i 's|"@cloudtrain/sdk": "\*"|"@cloudtrain/sdk": "'"$VERSION"'"|g' packages/chatbot/package.json
+          sed -i 's|"@cloudtrain/chatbot": "\*"|"@cloudtrain/chatbot": "'"$VERSION"'"|g' packages/chatbot-react/package.json
 
       - name: Build SDK
         run: bun run build
