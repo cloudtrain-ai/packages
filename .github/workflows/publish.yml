@@ -28,7 +28,7 @@ jobs:
       - name: Set version from release tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          for pkg in sdk chatbot chatbot-react; do
+          for pkg in sdk chatbot chatbot-react chatbot-react-native; do
             cd packages/$pkg
             npm version "$VERSION" --no-git-tag-version --allow-same-version
             cd ../..
@@ -36,6 +36,7 @@ jobs:
           # Pin internal cross-package deps to the release version (replaces "*")
           sed -i 's|"@cloudtrain/sdk": "\*"|"@cloudtrain/sdk": "'"$VERSION"'"|g' packages/chatbot/package.json
           sed -i 's|"@cloudtrain/chatbot": "\*"|"@cloudtrain/chatbot": "'"$VERSION"'"|g' packages/chatbot-react/package.json
+          sed -i 's|"@cloudtrain/sdk": "\*"|"@cloudtrain/sdk": "'"$VERSION"'"|g' packages/chatbot-react-native/package.json
 
       - name: Build SDK
         run: bun run build
@@ -49,14 +50,30 @@ jobs:
         run: bun run build
         working-directory: packages/chatbot-react
 
+      - name: Build React Native Package
+        run: bun run build
+        working-directory: packages/chatbot-react-native
+
       - name: Publish SDK
         run: npm publish --provenance --access public
         working-directory: packages/sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish Chatbot
         run: npm publish --provenance --access public
         working-directory: packages/chatbot
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish React Wrapper
         run: npm publish --provenance --access public
         working-directory: packages/chatbot-react
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish React Native Package
+        run: npm publish --provenance --access public
+        working-directory: packages/chatbot-react-native
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

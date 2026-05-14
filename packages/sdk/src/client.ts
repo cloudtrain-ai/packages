@@ -16,11 +16,13 @@ export class CloudTrain {
     private readonly apiKey: string;
     private readonly baseUrl: string;
     private readonly defaultTimeoutMs: number;
+    private readonly fetch: typeof fetch;
 
     constructor(config: CloudTrainConfig) {
         this.apiKey = config.apiKey;
         this.baseUrl = (config.baseUrl ?? "https://cloudtrain.ai").replace(/\/$/, "");
         this.defaultTimeoutMs = config.timeoutMs ?? 60_000;
+        this.fetch = config.fetch ?? globalThis.fetch.bind(globalThis);
     }
 
     private createTimeoutController(userSignal: AbortSignal | undefined, timeoutMs: number) {
@@ -48,7 +50,7 @@ export class CloudTrain {
     async chat(options: Omit<ChatOptions, "stream">): Promise<ChatCompletion> {
         const { signal, cleanup } = this.createTimeoutController(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
         try {
-            const response = await fetch(`${this.baseUrl}/api/v1/chat/completions`, {
+            const response = await this.fetch(`${this.baseUrl}/api/v1/chat/completions`, {
                 method: "POST",
                 headers: this.headers,
                 body: JSON.stringify({
@@ -77,7 +79,7 @@ export class CloudTrain {
     async *chatStream(options: Omit<ChatOptions, "stream">): AsyncGenerator<string, void, unknown> {
         const { signal, cleanup, clearTimeoutOnly } = this.createTimeoutController(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
         try {
-            const response = await fetch(`${this.baseUrl}/api/v1/chat/completions`, {
+            const response = await this.fetch(`${this.baseUrl}/api/v1/chat/completions`, {
                 method: "POST",
                 headers: this.headers,
                 body: JSON.stringify({
@@ -120,7 +122,7 @@ export class CloudTrain {
      * Fetch metadata for the agent associated with the current API key.
      */
     async getAgent(): Promise<Agent> {
-        const response = await fetch(`${this.baseUrl}/api/v1/agent`, {
+        const response = await this.fetch(`${this.baseUrl}/api/v1/agent`, {
             method: "GET",
             headers: this.headers,
         });

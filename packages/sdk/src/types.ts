@@ -32,6 +32,12 @@ export type CloudTrainConfig = {
     apiKey: string;
     baseUrl?: string;
     timeoutMs?: number;
+    /**
+     * Optional custom fetch implementation. Pass a streaming-capable fetch
+     * (e.g. `expo/fetch`) when the platform's global fetch doesn't expose
+     * `response.body` as a `ReadableStream` (React Native default).
+     */
+    fetch?: typeof fetch;
 };
 
 export type Agent = {

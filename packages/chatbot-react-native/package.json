@@ -1,0 +1,41 @@
+{
+  "name": "@cloudtrain/chatbot-react-native",
+  "version": "0.0.1",
+  "description": "CloudTrain Chatbot for React Native",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "cloudtrain",
+    "ai",
+    "chatbot",
+    "react-native"
+  ],
+  "license": "MIT",
+  "homepage": "https://cloudtrain.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloudtrain-ai/packages"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-native": ">=0.70",
+    "react-native-svg": ">=13",
+    "react-native-markdown-display": ">=7",
+    "react-native-safe-area-context": ">=4"
+  },
+  "dependencies": {
+    "@cloudtrain/sdk": "*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react-native-safe-area-context": "^4.0.0",
+    "typescript": "^5.4.0"
+  }
+}
