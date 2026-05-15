@@ -44,7 +44,7 @@ const SafePanelView = ({
     </View>
   );
 };
-import { CloudTrain, revealStream, type Agent } from '@cloudtrain/sdk';
+import { CloudTrain, StreamReveal, type Agent } from '@cloudtrain/sdk';
 
 // Try to use expo/fetch (streaming-capable) when available — RN's default fetch
 // does not expose `response.body` as a ReadableStream. Falls back gracefully
@@ -186,38 +186,31 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         content: m.content,
       }));
 
-      // Streaming is opportunistic. Module-load detection of `expo/fetch` is
-      // not a guarantee that SSE streaming actually works in the consumer's
-      // runtime — transitive Expo deps can resolve `expo/fetch` even in bare
-      // RN apps, RN versions vary in stream support, and some fetch impls
-      // expose `body` but don't stream incrementally. So we try streaming
-      // first and transparently fall back to non-streaming `chat()` if the
-      // stream errors before yielding any chunks. Once chunks have started
-      // arriving (or the user aborted), the error surfaces normally.
-      const rawStream: AsyncIterable<string> = (async function* () {
-        if (streamingFetch) {
-          let yieldedAny = false;
-          try {
-            for await (const chunk of client.chatStream({ messages: apiMessages, meta, signal: controller.signal })) {
-              yieldedAny = true;
-              yield chunk;
-            }
-            return;
-          } catch (err) {
-            if (yieldedAny || controller.signal.aborted) throw err;
-            // eslint-disable-next-line no-console
-            console.warn('[Cloudtrain] streaming failed before first chunk, falling back to non-streaming chat()', err);
-          }
-        }
-        const result = await client.chat({ messages: apiMessages, meta, signal: controller.signal });
-        yield result.choices[0]?.message?.content ?? '';
-      })();
+      const reveal = new StreamReveal({
+        signal: controller.signal,
+        onUpdate: (text) => {
+          setIsLoading(false);
+          upsertAi(text);
+          scrollToBottom();
+        },
+      });
 
-      for await (const displayed of revealStream(rawStream, { signal: controller.signal })) {
-        setIsLoading(false);
-        upsertAi(displayed);
-        scrollToBottom();
+      if (streamingFetch) {
+        await client.chatStream({
+          messages: apiMessages,
+          meta,
+          signal: controller.signal,
+          onChunk: (chunk) => reveal.feed(chunk),
+          onComplete: () => reveal.complete(),
+        });
+      } else {
+        // Bare RN fallback: non-streaming chat() + feed the full response
+        // into StreamReveal so the char-paced animation still plays.
+        const result = await client.chat({ messages: apiMessages, meta, signal: controller.signal });
+        reveal.feed(result.choices[0]?.message?.content ?? '');
+        reveal.complete();
       }
+      await reveal.done;
     } catch (error) {
       const isAbort =
         controller.signal.aborted ||

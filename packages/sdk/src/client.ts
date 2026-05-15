@@ -73,10 +73,24 @@ export class CloudTrain {
     }
 
     /**
-     * Send a chat completion request and stream the response text.
-     * Yields text chunks as they arrive.
+     * Send a chat completion request and stream the response text via callbacks.
+     *
+     * Callback-based primitive (vs an AsyncGenerator) to avoid requiring
+     * `Symbol.asyncIterator` and regenerator runtime in restricted environments
+     * (older React Native, non-Hermes JSC, etc.).
+     *
+     * Resolves when the stream completes naturally. Rejects with
+     * `CloudTrainAPIError` on HTTP errors or `DOMException("AbortError")` when
+     * aborted via signal/timeout. `onError` is also invoked for consumers that
+     * prefer to handle errors via callback rather than `.catch()`.
      */
-    async *chatStream(options: Omit<ChatOptions, "stream">): AsyncGenerator<string, void, unknown> {
+    async chatStream(
+        options: Omit<ChatOptions, "stream"> & {
+            onChunk: (chunk: string) => void;
+            onComplete?: () => void;
+            onError?: (err: unknown) => void;
+        },
+    ): Promise<void> {
         const { signal, cleanup, clearTimeoutOnly } = this.createTimeoutController(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
         try {
             const response = await this.fetch(`${this.baseUrl}/api/v1/chat/completions`, {
@@ -108,13 +122,51 @@ export class CloudTrain {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    yield decoder.decode(value, { stream: true });
+                    options.onChunk(decoder.decode(value, { stream: true }));
                 }
             } finally {
                 reader.releaseLock();
             }
+            options.onComplete?.();
+        } catch (err) {
+            options.onError?.(err);
+            throw err;
         } finally {
             cleanup();
+        }
+    }
+
+    /**
+     * AsyncIterable convenience wrapper around `chatStream`. Yields text chunks
+     * as they arrive. Useful in Node/web/modern environments — prefer the
+     * callback `chatStream` for React Native and runtimes with limited
+     * `Symbol.asyncIterator` support.
+     */
+    async *chatStreamIterable(options: Omit<ChatOptions, "stream">): AsyncGenerator<string, void, unknown> {
+        const buffer: string[] = [];
+        let done = false;
+        let error: unknown = null;
+        let resolveWaiter: (() => void) | null = null;
+        const notify = () => {
+            const r = resolveWaiter;
+            resolveWaiter = null;
+            r?.();
+        };
+        this.chatStream({
+            ...options,
+            onChunk: (chunk) => { buffer.push(chunk); notify(); },
+            onComplete: () => { done = true; notify(); },
+            onError: (err) => { error = err; done = true; notify(); },
+        }).catch(() => {});
+        while (true) {
+            if (error) throw error;
+            if (buffer.length) {
+                yield buffer.shift()!;
+            } else if (done) {
+                return;
+            } else {
+                await new Promise<void>(r => { resolveWaiter = r; });
+            }
         }
     }
 

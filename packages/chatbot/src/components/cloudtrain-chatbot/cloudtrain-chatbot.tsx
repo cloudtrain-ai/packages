@@ -9,7 +9,7 @@ import ChatHeader from './chat-header';
 import { Input } from './input';
 import { marked } from 'marked';
 import { ClickOutside } from 'stencil-click-outside';
-import { CloudTrain } from '@cloudtrain/sdk';
+import { CloudTrain, StreamReveal } from '@cloudtrain/sdk';
 
 type Message = {
   content: string;
@@ -205,9 +205,16 @@ export class CloudTrainChatbot {
   };
 
   private sendMessage = async (message: string) => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    let resolveAnim: (() => void) | null = null;
     this.abortController = new AbortController();
+    const controller = this.abortController;
+    const reveal = new StreamReveal({
+      signal: controller.signal,
+      onUpdate: (text) => {
+        if (this.isLoading) this.isLoading = false;
+        this.upsertAiMessage(marked.parse(text, { async: false }) as string);
+        this.scrollToBottom();
+      },
+    });
     try {
       this.isLoading = true;
       this.isStreaming = true;
@@ -219,43 +226,20 @@ export class CloudTrainChatbot {
         content: m.content,
       }));
 
-      const stream = this.client.chatStream({
+      await this.client.chatStream({
         messages,
         meta: this.meta as Record<string, unknown>,
-        signal: this.abortController.signal,
+        signal: controller.signal,
+        onChunk: (chunk) => reveal.feed(chunk),
+        onComplete: () => reveal.complete(),
       });
-      let target = '';
-      let displayed = '';
-      let streamDone = false;
-
-      const CHAR_DELAY_MS = 20;
-      const animPromise = new Promise<void>(resolve => {
-        resolveAnim = resolve;
-        intervalId = setInterval(() => {
-          if (displayed.length < target.length) {
-            displayed = target.slice(0, displayed.length + 1);
-            if (this.isLoading) this.isLoading = false;
-            this.upsertAiMessage(marked.parse(displayed, { async: false }) as string);
-            this.scrollToBottom();
-          } else if (streamDone) {
-            if (intervalId !== null) clearInterval(intervalId);
-            intervalId = null;
-            resolve();
-          }
-        }, CHAR_DELAY_MS);
-      });
-
-      for await (const chunk of stream) {
-        target += chunk;
-      }
-      streamDone = true;
-
-      await animPromise;
-      this.announcement = displayed;
+      await reveal.done;
+      this.announcement = reveal.text;
     } catch (error) {
-      if (intervalId !== null) clearInterval(intervalId);
-      if (resolveAnim) (resolveAnim as () => void)();
-      const isAbort = error instanceof DOMException && error.name === 'AbortError';
+      reveal.abort();
+      const isAbort =
+        controller.signal.aborted ||
+        (error instanceof DOMException && error.name === 'AbortError');
       if (!isAbort) {
         const last = this.messages[this.messages.length - 1];
         if (last?.role === 'ai') {
