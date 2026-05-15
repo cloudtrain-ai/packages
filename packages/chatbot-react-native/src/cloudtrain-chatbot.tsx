@@ -16,7 +16,34 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
+
+/**
+ * Renders children inside a View that respects the device safe area.
+ * Lives inside our Modal's own SafeAreaProvider so it works even when the
+ * host app does not wrap its tree in a SafeAreaProvider.
+ */
+const SafePanelView = ({
+  backgroundColor,
+  children,
+}: {
+  backgroundColor: string;
+  children: React.ReactNode;
+}) => {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor,
+        paddingTop: insets.top,
+        paddingBottom: insets.bottom,
+      }}
+    >
+      {children}
+    </View>
+  );
+};
 import { CloudTrain, revealStream, type Agent } from '@cloudtrain/sdk';
 
 // Try to use expo/fetch (streaming-capable) when available — RN's default fetch
@@ -50,6 +77,8 @@ export type CloudtrainChatbotProps = {
   welcomeMessage?: string;
   welcomeSubtitle?: string;
   position?: 'bottom-right' | 'bottom-left';
+  /** Called when a chat request fails (excluding user-initiated aborts). */
+  onError?: (error: unknown) => void;
 };
 
 const DEFAULT_WELCOME = 'How can I help you today?';
@@ -68,6 +97,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     welcomeMessage = DEFAULT_WELCOME,
     welcomeSubtitle,
     position = 'bottom-right',
+    onError,
   } = props;
 
   const hookScheme = useColorScheme();
@@ -156,17 +186,32 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         content: m.content,
       }));
 
-      const rawStream: AsyncIterable<string> = streamingFetch
-        ? client.chatStream({ messages: apiMessages, meta, signal: controller.signal })
-        : (async function* () {
-            // Bare RN fallback: no streaming-capable fetch available. Use the
-            // non-streaming endpoint and feed the full response into revealStream
-            // so the char-by-char reveal animation still plays. The user waits
-            // for the full response before reveal starts (no live typing during
-            // generation), but the result is otherwise visually identical.
-            const result = await client.chat({ messages: apiMessages, meta, signal: controller.signal });
-            yield result.choices[0]?.message?.content ?? '';
-          })();
+      // Streaming is opportunistic. Module-load detection of `expo/fetch` is
+      // not a guarantee that SSE streaming actually works in the consumer's
+      // runtime — transitive Expo deps can resolve `expo/fetch` even in bare
+      // RN apps, RN versions vary in stream support, and some fetch impls
+      // expose `body` but don't stream incrementally. So we try streaming
+      // first and transparently fall back to non-streaming `chat()` if the
+      // stream errors before yielding any chunks. Once chunks have started
+      // arriving (or the user aborted), the error surfaces normally.
+      const rawStream: AsyncIterable<string> = (async function* () {
+        if (streamingFetch) {
+          let yieldedAny = false;
+          try {
+            for await (const chunk of client.chatStream({ messages: apiMessages, meta, signal: controller.signal })) {
+              yieldedAny = true;
+              yield chunk;
+            }
+            return;
+          } catch (err) {
+            if (yieldedAny || controller.signal.aborted) throw err;
+            // eslint-disable-next-line no-console
+            console.warn('[Cloudtrain] streaming failed before first chunk, falling back to non-streaming chat()', err);
+          }
+        }
+        const result = await client.chat({ messages: apiMessages, meta, signal: controller.signal });
+        yield result.choices[0]?.message?.content ?? '';
+      })();
 
       for await (const displayed of revealStream(rawStream, { signal: controller.signal })) {
         setIsLoading(false);
@@ -179,6 +224,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         (error as { name?: string })?.name === 'AbortError' ||
         ((error as Error)?.message ?? '').toLowerCase().includes('abort');
       if (!isAbort) {
+        onError?.(error);
         setMessages(prev => {
           const last = prev[prev.length - 1];
           const base = last?.role === 'ai' ? prev.slice(0, -1) : prev;
@@ -264,7 +310,8 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       </View>
 
       <Modal visible={isOpen} animationType="slide" transparent onRequestClose={close} statusBarTranslucent>
-        <SafeAreaView style={[styles.modalRoot, { backgroundColor: theme.background }]}>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <SafePanelView backgroundColor={theme.background}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalRoot}
@@ -366,7 +413,8 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
             )}
           </View>
         </KeyboardAvoidingView>
-        </SafeAreaView>
+        </SafePanelView>
+        </SafeAreaProvider>
       </Modal>
     </>
   );
