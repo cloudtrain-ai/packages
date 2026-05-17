@@ -1,4 +1,4 @@
-import type { Agent, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError } from "./types";
+import type { Agent, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError, ResponseFormat } from "./types";
 
 export class CloudTrainAPIError extends Error {
     readonly status: number;
@@ -46,8 +46,12 @@ export class CloudTrain {
 
     /**
      * Send a chat completion request and get the full response.
+     *
+     * When `response_format.type === "json_schema"` is set, the SDK auto-parses
+     * each choice's `content` from a JSON string into the typed object `T`.
+     * Specify `T` to type the parsed result, e.g. `chat<MySchema>({...})`.
      */
-    async chat(options: Omit<ChatOptions, "stream">): Promise<ChatCompletion> {
+    async chat<T = string>(options: Omit<ChatOptions, "stream">): Promise<ChatCompletion<T>> {
         const { signal, cleanup } = this.createTimeoutController(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
         try {
             const response = await this.fetch(`${this.baseUrl}/api/v1/chat/completions`, {
@@ -57,6 +61,7 @@ export class CloudTrain {
                     messages: options.messages,
                     stream: false,
                     meta: options.meta,
+                    response_format: options.response_format,
                 }),
                 signal,
             });
@@ -66,7 +71,22 @@ export class CloudTrain {
                 throw new CloudTrainAPIError(response.status, body.error);
             }
 
-            return await (response.json() as Promise<ChatCompletion>);
+            const completion = await (response.json() as Promise<ChatCompletion<string>>);
+
+            if (options.response_format?.type === "json_schema") {
+                return {
+                    ...completion,
+                    choices: completion.choices.map(choice => ({
+                        ...choice,
+                        message: {
+                            ...choice.message,
+                            content: JSON.parse(choice.message.content) as T,
+                        },
+                    })),
+                };
+            }
+
+            return completion as ChatCompletion<T>;
         } finally {
             cleanup();
         }
@@ -79,15 +99,20 @@ export class CloudTrain {
      * `Symbol.asyncIterator` and regenerator runtime in restricted environments
      * (older React Native, non-Hermes JSC, etc.).
      *
+     * When `response_format.type === "json_schema"`, chunks still fire as raw
+     * text strings (so consumers can show progress) but `onComplete` receives
+     * the buffered content auto-parsed as `T`. For text streams, `onComplete`
+     * receives the joined string.
+     *
      * Resolves when the stream completes naturally. Rejects with
      * `CloudTrainAPIError` on HTTP errors or `DOMException("AbortError")` when
      * aborted via signal/timeout. `onError` is also invoked for consumers that
      * prefer to handle errors via callback rather than `.catch()`.
      */
-    async chatStream(
+    async chatStream<T = string>(
         options: Omit<ChatOptions, "stream"> & {
             onChunk: (chunk: string) => void;
-            onComplete?: () => void;
+            onComplete?: (result: T) => void;
             onError?: (err: unknown) => void;
         },
     ): Promise<void> {
@@ -100,6 +125,7 @@ export class CloudTrain {
                     messages: options.messages,
                     stream: true,
                     meta: options.meta,
+                    response_format: options.response_format,
                 }),
                 signal,
             });
@@ -118,16 +144,22 @@ export class CloudTrain {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
+            let buffer = "";
             try {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    options.onChunk(decoder.decode(value, { stream: true }));
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+                    options.onChunk(chunk);
                 }
             } finally {
                 reader.releaseLock();
             }
-            options.onComplete?.();
+            const result = options.response_format?.type === "json_schema"
+                ? JSON.parse(buffer) as T
+                : buffer as unknown as T;
+            options.onComplete?.(result);
         } catch (err) {
             options.onError?.(err);
             throw err;
@@ -167,6 +199,86 @@ export class CloudTrain {
             } else {
                 await new Promise<void>(r => { resolveWaiter = r; });
             }
+        }
+    }
+
+    /**
+     * Stream a structured (JSON Schema) response as progressively-completing
+     * partial objects. CloudTrain extension — sends `stream_format: "partial-json"`
+     * and parses SSE frames of the form `data: {"partial": {...}}`, terminated by
+     * `data: [DONE]`.
+     *
+     * `onPartial` fires for every snapshot with the latest `Partial<T>`.
+     * `onComplete` fires once with the final fully-formed `T` (the last partial
+     * seen before `[DONE]`). Ideal for generative-UI patterns (form fields
+     * filling in live, progressive lists, etc.).
+     */
+    async chatStreamPartial<T>(
+        options: Omit<ChatOptions, "stream" | "response_format"> & {
+            response_format: Extract<ResponseFormat, { type: "json_schema" }>;
+            onPartial: (partial: Partial<T>) => void;
+            onComplete?: (final: T) => void;
+            onError?: (err: unknown) => void;
+        },
+    ): Promise<void> {
+        const { signal, cleanup, clearTimeoutOnly } = this.createTimeoutController(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
+        try {
+            const response = await this.fetch(`${this.baseUrl}/api/v1/chat/completions`, {
+                method: "POST",
+                headers: this.headers,
+                body: JSON.stringify({
+                    messages: options.messages,
+                    stream: true,
+                    stream_format: "partial-json",
+                    meta: options.meta,
+                    response_format: options.response_format,
+                }),
+                signal,
+            });
+
+            clearTimeoutOnly();
+
+            if (!response.ok) {
+                const body = await response.json() as CloudTrainError;
+                throw new CloudTrainAPIError(response.status, body.error);
+            }
+
+            if (!response.body) {
+                throw new Error("No response body available for streaming");
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let latest: Partial<T> | undefined;
+            let terminated = false;
+            try {
+                while (!terminated) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let sep: number;
+                    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+                        const frame = buffer.slice(0, sep);
+                        buffer = buffer.slice(sep + 2);
+                        const line = frame.split("\n").find(l => l.startsWith("data:"));
+                        if (!line) continue;
+                        const payload = line.slice(5).trimStart();
+                        if (payload === "[DONE]") { terminated = true; break; }
+                        const parsed = JSON.parse(payload) as { partial: Partial<T> };
+                        latest = parsed.partial;
+                        options.onPartial(latest);
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+            }
+            if (latest !== undefined) options.onComplete?.(latest as T);
+        } catch (err) {
+            options.onError?.(err);
+            throw err;
+        } finally {
+            cleanup();
         }
     }
 

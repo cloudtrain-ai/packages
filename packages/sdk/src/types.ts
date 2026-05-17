@@ -1,7 +1,27 @@
-export type Message = {
+export type Message<T = string> = {
     role: "system" | "user" | "assistant";
-    content: string;
+    content: T;
 };
+
+/**
+ * OpenAI-compatible response format. Pass `{ type: "json_schema", json_schema: {...} }`
+ * to constrain the model to a JSON Schema; for non-streaming calls the SDK will
+ * auto-parse the resulting `content` so callers get a typed object rather than
+ * a JSON string. Streaming chunks remain strings — buffer them and parse at the
+ * end of the stream.
+ *
+ * Note: `json_object` is intentionally not supported (the API rejects it).
+ */
+export type ResponseFormat =
+    | { type: "text" }
+    | {
+        type: "json_schema";
+        json_schema: {
+            name: string;
+            schema: Record<string, unknown>;
+            strict?: boolean;
+        };
+    };
 
 export type ChatOptions = {
     messages: Message[];
@@ -9,14 +29,15 @@ export type ChatOptions = {
     meta?: Record<string, unknown>;
     signal?: AbortSignal;
     timeoutMs?: number;
+    response_format?: ResponseFormat;
 };
 
-export type ChatCompletion = {
+export type ChatCompletion<T = string> = {
     id: string;
     object: "chat.completion";
     choices: {
         index: number;
-        message: Message;
+        message: Message<T>;
         finish_reason: string;
     }[];
 };
