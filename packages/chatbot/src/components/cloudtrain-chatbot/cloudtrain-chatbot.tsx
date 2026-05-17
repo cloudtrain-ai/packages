@@ -57,6 +57,17 @@ export class CloudTrainChatbot {
   @Prop() welcomeMessage: string = 'How can I help you today?';
   @Prop() welcomeSubtitle?: string;
   @Prop() position: 'bottom-right' | 'bottom-left' = 'bottom-right';
+  /**
+   * Milliseconds between each character reveal in the streaming animation.
+   * `0` (default) shows characters as fast as they arrive from the network.
+   * A positive value (e.g. `20`) produces a typewriter effect.
+   */
+  @Prop() revealDelayMs: number = 0;
+  /**
+   * If true, the chat panel opens automatically when the chatbot mounts.
+   * Useful for demos, onboarding flows, or pages where engagement is desired.
+   */
+  @Prop() defaultOpen: boolean = false;
   @State() activeTheme: 'light' | 'dark' = 'light';
   @State() private fetchedName: string | null = null;
   @State() private fetchedAvatar: string | null = null;
@@ -72,6 +83,7 @@ export class CloudTrainChatbot {
   @State() private announcement = '';
   @State() private input: string = '';
   @State() private messages: Message[] = [];
+  @State() private confirmingReset = false;
 
   private messagesRef: HTMLDivElement | null = null;
   private inputRef: HTMLInputElement | null = null;
@@ -86,7 +98,17 @@ export class CloudTrainChatbot {
   componentWillLoad() {
     this.activeTheme = this.getTheme(this.theme);
     this.client = new CloudTrain({ apiKey: this.apiKey, baseUrl: this.baseUrl });
-    this.loadAgent();
+    // Only fetch agent metadata if at least one of name/avatar isn't already
+    // provided via props — the API call is purely to fill in the missing piece.
+    if (!this.botName || !this.avatarUrl) {
+      this.loadAgent();
+    }
+    if (this.defaultOpen) {
+      // Defer to after first render so the open transition plays.
+      setTimeout(() => {
+        if (!this.isOpen) this.toggleChat();
+      }, 0);
+    }
   }
 
   connectedCallback() {
@@ -100,7 +122,11 @@ export class CloudTrainChatbot {
   private handleKeydown = (e: KeyboardEvent) => {
     if (!this.isOpen) return;
     if (e.key === 'Escape') {
-      this.toggleChat();
+      if (this.confirmingReset) {
+        this.confirmingReset = false;
+      } else {
+        this.toggleChat();
+      }
       return;
     }
     if (e.key === 'Tab' && this.panelRef) {
@@ -177,7 +203,17 @@ export class CloudTrainChatbot {
     }, 100);
   };
 
-  private resetConversation = () => {
+  private requestReset = () => {
+    if (this.messages.length === 0) return;
+    this.confirmingReset = true;
+  };
+
+  private cancelReset = () => {
+    this.confirmingReset = false;
+  };
+
+  private confirmReset = () => {
+    this.confirmingReset = false;
     if (this.isStreaming && this.abortController) {
       this.abortController.abort();
     }
@@ -209,6 +245,7 @@ export class CloudTrainChatbot {
     const controller = this.abortController;
     const reveal = new StreamReveal({
       signal: controller.signal,
+      charDelayMs: this.revealDelayMs,
       onUpdate: (text) => {
         if (this.isLoading) this.isLoading = false;
         this.upsertAiMessage(marked.parse(text, { async: false }) as string);
@@ -334,7 +371,7 @@ export class CloudTrainChatbot {
               botName={this.displayName}
               avatarUrl={this.displayAvatar}
               onClose={this.toggleChat}
-              onReset={this.messages.length > 0 ? this.resetConversation : undefined}
+              onReset={this.messages.length > 0 ? this.requestReset : undefined}
             />
             <div class="sr-only" aria-live="polite" aria-atomic="true">{this.announcement}</div>
             {this.messages.length ? (
@@ -395,6 +432,24 @@ export class CloudTrainChatbot {
                 </div>
                 <div class="px-4 pb-4">{inputForm}</div>
                 <ChatFooter hideBranding={this.hideBranding} />
+              </div>
+            )}
+            {this.confirmingReset && (
+              <div
+                class="ct-confirm-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ct-confirm-title"
+                onClick={this.cancelReset}
+              >
+                <div class="ct-confirm-dialog" onClick={(e: MouseEvent) => e.stopPropagation()}>
+                  <h4 id="ct-confirm-title" class="ct-confirm-title">Start a new conversation?</h4>
+                  <p class="ct-confirm-desc">Your current messages will be cleared.</p>
+                  <div class="ct-confirm-actions">
+                    <Button variant="outline" onClick={this.cancelReset}>Cancel</Button>
+                    <Button variant="default" onClick={this.confirmReset}>New chat</Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

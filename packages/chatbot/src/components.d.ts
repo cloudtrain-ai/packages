@@ -19,6 +19,11 @@ export namespace Components {
          */
         "chatSuggestions": string[];
         /**
+          * If true, the chat panel opens automatically when the chatbot mounts. Useful for demos, onboarding flows, or pages where engagement is desired.
+          * @default false
+         */
+        "defaultOpen": boolean;
+        /**
           * @default false
          */
         "hideBranding": boolean;
@@ -30,6 +35,11 @@ export namespace Components {
           * @default 'bottom-right'
          */
         "position": 'bottom-right' | 'bottom-left';
+        /**
+          * Milliseconds between each character reveal in the streaming animation. `0` (default) shows characters as fast as they arrive from the network. A positive value (e.g. `20`) produces a typewriter effect.
+          * @default 0
+         */
+        "revealDelayMs": number;
         /**
           * @default 'system'
          */
@@ -66,6 +76,11 @@ declare namespace LocalJSX {
          */
         "chatSuggestions"?: string[];
         /**
+          * If true, the chat panel opens automatically when the chatbot mounts. Useful for demos, onboarding flows, or pages where engagement is desired.
+          * @default false
+         */
+        "defaultOpen"?: boolean;
+        /**
           * @default false
          */
         "hideBranding"?: boolean;
@@ -77,6 +92,11 @@ declare namespace LocalJSX {
           * @default 'bottom-right'
          */
         "position"?: 'bottom-right' | 'bottom-left';
+        /**
+          * Milliseconds between each character reveal in the streaming animation. `0` (default) shows characters as fast as they arrive from the network. A positive value (e.g. `20`) produces a typewriter effect.
+          * @default 0
+         */
+        "revealDelayMs"?: number;
         /**
           * @default 'system'
          */

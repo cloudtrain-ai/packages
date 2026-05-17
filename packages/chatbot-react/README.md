@@ -131,6 +131,8 @@ cloudtrain-chatbot[data-theme="dark"] {
 | `welcome-message` | String   | ❌ No    | Heading shown in the empty state. Defaults to `"How can I help you today?"`. |
 | `welcome-subtitle`| String   | ❌ No    | Subline shown under the heading. When unset, automatically adapts based on whether `chat-suggestions` is provided. |
 | `position`        | "bottom-right" \| "bottom-left" | ❌ No | Corner of the viewport where the FAB and panel anchor. Defaults to `bottom-right`. |
+| `reveal-delay-ms` | Number | ❌ No    | Ms between each character in the streaming reveal animation. `0` (default) shows characters as they arrive; positive values produce a typewriter effect. |
+| `default-open`    | Boolean | ❌ No   | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
 
 ---
 

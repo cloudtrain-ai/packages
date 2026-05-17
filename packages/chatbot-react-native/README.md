@@ -49,6 +49,9 @@ The component renders an absolutely-positioned FAB that opens a full-screen moda
 | `welcomeMessage`  | string   | ❌       | Heading shown in the empty state. |
 | `welcomeSubtitle` | string   | ❌       | Subline shown under the heading. |
 | `position`        | `"bottom-right" \| "bottom-left"` | ❌ | FAB anchor corner. Defaults to `bottom-right`. |
+| `revealDelayMs`   | number   | ❌       | Ms between each character in the streaming reveal animation. `0` (default) shows characters as they arrive; positive values (e.g. `20`) produce a typewriter effect. |
+| `defaultOpen`     | boolean  | ❌       | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
+| `onError`         | `(error: unknown) => void` | ❌ | Called when a chat request fails (excludes user-initiated aborts). |
 
 ## Theming
 

@@ -79,6 +79,17 @@ export type CloudtrainChatbotProps = {
   position?: 'bottom-right' | 'bottom-left';
   /** Called when a chat request fails (excluding user-initiated aborts). */
   onError?: (error: unknown) => void;
+  /**
+   * Milliseconds between each character reveal in the streaming animation.
+   * `0` (default) shows characters as fast as they arrive from the network.
+   * A positive value (e.g. `20`) produces a typewriter effect.
+   */
+  revealDelayMs?: number;
+  /**
+   * If true, the chat panel opens automatically when the chatbot mounts.
+   * Useful for demos, onboarding flows, or pages where engagement is desired.
+   */
+  defaultOpen?: boolean;
 };
 
 const DEFAULT_WELCOME = 'How can I help you today?';
@@ -98,6 +109,8 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     welcomeSubtitle,
     position = 'bottom-right',
     onError,
+    revealDelayMs = 0,
+    defaultOpen = false,
   } = props;
 
   const hookScheme = useColorScheme();
@@ -115,14 +128,15 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     [apiKey, baseUrl],
   );
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [hasOpenedOnce, setHasOpenedOnce] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [hasOpenedOnce, setHasOpenedOnce] = useState(defaultOpen);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [fetched, setFetched] = useState<Agent | null>(null);
   const [fabAvatarLoaded, setFabAvatarLoaded] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -133,6 +147,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   const displayAvatar = avatarUrl ?? fetched?.logo ?? null;
 
   useEffect(() => {
+    // Only fetch agent metadata if at least one of name/avatar isn't already
+    // provided via props — the API call is purely to fill in the missing piece.
+    if (botName && avatarUrl) return;
     let cancelled = false;
     client
       .getAgent()
@@ -143,7 +160,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, botName, avatarUrl]);
 
   useEffect(() => {
     if (hasOpenedOnce || isOpen) return;
@@ -188,6 +205,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
 
       const reveal = new StreamReveal({
         signal: controller.signal,
+        charDelayMs: revealDelayMs,
         onUpdate: (text) => {
           setIsLoading(false);
           upsertAi(text);
@@ -244,7 +262,15 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     if (abortRef.current) abortRef.current.abort();
   };
 
-  const onReset = () => {
+  const requestReset = () => {
+    if (messages.length === 0) return;
+    setConfirmingReset(true);
+  };
+
+  const cancelReset = () => setConfirmingReset(false);
+
+  const confirmReset = () => {
+    setConfirmingReset(false);
     if (isStreaming && abortRef.current) abortRef.current.abort();
     setMessages([]);
     setInput('');
@@ -314,7 +340,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
             avatarUrl={displayAvatar}
             theme={theme}
             onClose={close}
-            onReset={messages.length > 0 ? onReset : undefined}
+            onReset={messages.length > 0 ? requestReset : undefined}
           />
 
           {messages.length === 0 ? (
@@ -406,6 +432,53 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
             )}
           </View>
         </KeyboardAvoidingView>
+        {confirmingReset && (
+          <Pressable
+            onPress={cancelReset}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss confirmation"
+            style={styles.confirmOverlay}
+          >
+            <Pressable
+              onPress={() => {}}
+              style={[
+                styles.confirmDialog,
+                { backgroundColor: theme.background, borderColor: theme.border },
+              ]}
+            >
+              <Text style={[styles.confirmTitle, { color: theme.foreground }]}>
+                Start a new conversation?
+              </Text>
+              <Text style={[styles.confirmDesc, { color: theme.mutedForeground }]}>
+                Your current messages will be cleared.
+              </Text>
+              <View style={styles.confirmActions}>
+                <Pressable
+                  onPress={cancelReset}
+                  style={({ pressed }) => [
+                    styles.confirmBtn,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: pressed ? theme.accent : 'transparent',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.confirmBtnText, { color: theme.foreground }]}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={confirmReset}
+                  style={({ pressed }) => [
+                    styles.confirmBtn,
+                    styles.confirmBtnPrimary,
+                    { backgroundColor: pressed ? theme.primary + 'd9' : theme.primary },
+                  ]}
+                >
+                  <Text style={[styles.confirmBtnText, { color: theme.primaryForeground }]}>New chat</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        )}
         </SafePanelView>
         </SafeAreaProvider>
       </Modal>
@@ -469,6 +542,39 @@ const styles = StyleSheet.create({
   messagesContent: { padding: 16, gap: 16 },
   inputWrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 8 },
   poweredBy: { fontSize: 11, textAlign: 'center', paddingTop: 8, borderTopWidth: 1 },
+  confirmOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 100,
+  },
+  confirmDialog: {
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  confirmTitle: { fontSize: 15, fontWeight: '600', marginBottom: 6, textAlign: 'center' },
+  confirmDesc: { fontSize: 13, marginBottom: 16, textAlign: 'center' },
+  confirmActions: { flexDirection: 'row', gap: 8, alignSelf: 'stretch' },
+  confirmBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnPrimary: { borderColor: 'transparent' },
+  confirmBtnText: { fontSize: 14, fontWeight: '500' },
 });
 
 export default CloudtrainChatbot;

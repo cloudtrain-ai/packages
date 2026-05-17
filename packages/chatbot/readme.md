@@ -132,6 +132,8 @@ Here’s a full example of the chatbot integrated into an HTML page:
 | `welcome-message`  | String | ❌ No    | Heading shown in the empty state. Defaults to `"How can I help you today?"`. |
 | `welcome-subtitle` | String | ❌ No    | Subline shown under the heading. When unset, automatically adapts based on whether `chat-suggestions` is provided. |
 | `position`         | "bottom-right" \| "bottom-left" | ❌ No | Corner of the viewport where the FAB and panel anchor. Defaults to `bottom-right`. |
+| `reveal-delay-ms`  | Number | ❌ No    | Milliseconds between each character in the streaming reveal animation. `0` (default) shows characters as fast as they arrive. A positive value (e.g. `20`) produces a typewriter effect. |
+| `default-open`     | Boolean | ❌ No   | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
 
 ### 🔹 Properties
 | Property           | Type       | Description                                   |
