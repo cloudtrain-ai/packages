@@ -89,7 +89,15 @@ export class CloudTrainChatbot {
   private inputRef: HTMLInputElement | null = null;
   private panelRef: HTMLDivElement | null = null;
   private abortController: AbortController | null = null;
-  private originalBodyOverflow: string = '';
+  private savedScrollY = 0;
+  private originalBodyStyles: {
+    overflow: string;
+    position: string;
+    top: string;
+    left: string;
+    right: string;
+    width: string;
+  } | null = null;
 
   private getTheme(theme: 'light' | 'dark' | 'system') {
     return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
@@ -117,6 +125,58 @@ export class CloudTrainChatbot {
 
   disconnectedCallback() {
     document.removeEventListener('keydown', this.handleKeydown);
+    window.visualViewport?.removeEventListener('resize', this.handleViewportChange);
+    window.visualViewport?.removeEventListener('scroll', this.handleViewportChange);
+    if (this.originalBodyStyles) this.unlockBodyScroll();
+  }
+
+  private handleViewportChange = () => {
+    if (!this.isOpen || !this.panelRef) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    this.panelRef.style.setProperty('--ct-kb-inset', `${inset}px`);
+  };
+
+  private preventOutsideTouch = (e: TouchEvent) => {
+    const target = e.target as Node;
+    if (this.messagesRef && this.messagesRef.contains(target)) return;
+    e.preventDefault();
+  };
+
+  private lockBodyScroll() {
+    if (this.originalBodyStyles) return;
+    this.savedScrollY = window.scrollY;
+    const s = document.body.style;
+    this.originalBodyStyles = {
+      overflow: s.overflow,
+      position: s.position,
+      top: s.top,
+      left: s.left,
+      right: s.right,
+      width: s.width,
+    };
+    s.overflow = 'hidden';
+    s.position = 'fixed';
+    s.top = `-${this.savedScrollY}px`;
+    s.left = '0';
+    s.right = '0';
+    s.width = '100%';
+    document.addEventListener('touchmove', this.preventOutsideTouch, { passive: false });
+  }
+
+  private unlockBodyScroll() {
+    document.removeEventListener('touchmove', this.preventOutsideTouch);
+    if (!this.originalBodyStyles) return;
+    const s = document.body.style;
+    s.overflow = this.originalBodyStyles.overflow;
+    s.position = this.originalBodyStyles.position;
+    s.top = this.originalBodyStyles.top;
+    s.left = this.originalBodyStyles.left;
+    s.right = this.originalBodyStyles.right;
+    s.width = this.originalBodyStyles.width;
+    this.originalBodyStyles = null;
+    window.scrollTo(0, this.savedScrollY);
   }
 
   private handleKeydown = (e: KeyboardEvent) => {
@@ -175,11 +235,22 @@ export class CloudTrainChatbot {
     this.isOpen = !this.isOpen;
     if (this.isOpen) {
       this.hasOpenedOnce = true;
-      this.originalBodyOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      setTimeout(() => this.inputRef?.focus(), 350);
+      this.lockBodyScroll();
+      window.visualViewport?.addEventListener('resize', this.handleViewportChange);
+      window.visualViewport?.addEventListener('scroll', this.handleViewportChange);
+      requestAnimationFrame(() => this.handleViewportChange());
+      setTimeout(() => {
+        try {
+          this.inputRef?.focus({ preventScroll: true });
+        } catch {
+          this.inputRef?.focus();
+        }
+      }, 350);
     } else {
-      document.body.style.overflow = this.originalBodyOverflow;
+      window.visualViewport?.removeEventListener('resize', this.handleViewportChange);
+      window.visualViewport?.removeEventListener('scroll', this.handleViewportChange);
+      if (this.panelRef) this.panelRef.style.removeProperty('--ct-kb-inset');
+      this.unlockBodyScroll();
     }
   };
 
@@ -361,7 +432,7 @@ export class CloudTrainChatbot {
             ref={el => (this.panelRef = el ?? null)}
             aria-hidden={this.isOpen ? 'false' : 'true'}
             class={cn(
-              'flex flex-col bg-background border sm:rounded-lg shadow-md overflow-hidden transition-all duration-500 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full h-full sm:inset-auto',
+              'flex flex-col bg-background border sm:rounded-lg shadow-md overflow-hidden transition-all duration-500 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full sm:inset-auto',
               chatConfig.chatPositions[this.position],
               chatConfig.dimensions['md'],
               this.isOpen ? chatConfig.states.open : chatConfig.states.closed,
@@ -376,7 +447,7 @@ export class CloudTrainChatbot {
             <div class="sr-only" aria-live="polite" aria-atomic="true">{this.announcement}</div>
             {this.messages.length ? (
               <div class="flex flex-col flex-1 min-h-0 relative">
-                <div class="flex flex-col w-full flex-1 min-h-0 p-4 gap-6 overflow-y-auto" ref={elm => (this.messagesRef = elm ?? null)} onScroll={this.handleScroll}>
+                <div class="flex flex-col w-full flex-1 min-h-0 p-4 gap-6 overflow-y-auto overscroll-contain" ref={elm => (this.messagesRef = elm ?? null)} onScroll={this.handleScroll}>
                   {this.messages.map((message, idx) => (
                     <ChatBubble message={message} onRetry={idx === this.messages.length - 1 ? this.retryLastMessage : undefined} />
                   ))}
@@ -400,12 +471,17 @@ export class CloudTrainChatbot {
                     </Button>
                   </div>
                 )}
-                <div class="px-4 py-4">{inputForm}</div>
+                <div
+                  class="px-4 py-4 shrink-0"
+                  style={{ paddingBottom: 'max(var(--ct-kb-inset, 0px), env(safe-area-inset-bottom), 1rem)' }}
+                >
+                  {inputForm}
+                </div>
                 <ChatFooter hideBranding={this.hideBranding} />
               </div>
             ) : (
               <div class="flex flex-col flex-1 min-h-0">
-                <div class="flex-1 min-h-0 flex flex-col items-center justify-start gap-5 px-4 pt-10 pb-4 overflow-y-auto">
+                <div class="flex-1 min-h-0 flex flex-col items-center justify-start gap-5 px-4 pt-10 pb-4 overflow-y-auto overscroll-contain">
                   <Avatar src={this.displayAvatar} alt={this.displayName} size="lg" />
                   <div class="text-center space-y-1">
                     <h4 class="text-[16px] font-semibold">{this.welcomeMessage}</h4>
@@ -430,7 +506,12 @@ export class CloudTrainChatbot {
                     </div>
                   )}
                 </div>
-                <div class="px-4 pb-4">{inputForm}</div>
+                <div
+                  class="px-4 pb-4 shrink-0"
+                  style={{ paddingBottom: 'max(var(--ct-kb-inset, 0px), env(safe-area-inset-bottom), 1rem)' }}
+                >
+                  {inputForm}
+                </div>
                 <ChatFooter hideBranding={this.hideBranding} />
               </div>
             )}
