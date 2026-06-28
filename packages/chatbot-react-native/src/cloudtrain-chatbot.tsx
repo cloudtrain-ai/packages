@@ -79,6 +79,16 @@ export type CloudtrainChatbotProps = {
   position?: 'bottom-right' | 'bottom-left';
   /** Called when a chat request fails (excluding user-initiated aborts). */
   onError?: (error: unknown) => void;
+  /** Called when the chat panel opens. */
+  onChatOpened?: () => void;
+  /** Called when the chat panel closes. */
+  onChatClosed?: () => void;
+  /** Called when the user submits a message. */
+  onMessageSent?: (event: { text: string }) => void;
+  /** Called when a complete AI reply has finished streaming. */
+  onMessageReceived?: (event: { text: string }) => void;
+  /** Called when the user resets the conversation. */
+  onConversationReset?: () => void;
   /**
    * Milliseconds between each character reveal in the streaming animation.
    * `0` (default) shows characters as fast as they arrive from the network.
@@ -109,6 +119,11 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     welcomeSubtitle,
     position = 'bottom-right',
     onError,
+    onChatOpened,
+    onChatClosed,
+    onMessageSent,
+    onMessageReceived,
+    onConversationReset,
     revealDelayMs = 0,
     defaultOpen = false,
   } = props;
@@ -197,6 +212,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       setIsStreaming(true);
       setMessages(prev => [...prev, { role: 'user', content: message }]);
       scrollToBottom();
+      onMessageSent?.({ text: message });
 
       const apiMessages = [...messages, { role: 'user' as const, content: message }].map(m => ({
         role: (m.role === 'ai' ? 'assistant' : m.role) as 'user' | 'assistant',
@@ -229,6 +245,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         reveal.complete();
       }
       await reveal.done;
+      onMessageReceived?.({ text: reveal.text });
     } catch (error) {
       const isAbort =
         controller.signal.aborted ||
@@ -275,15 +292,20 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     setMessages([]);
     setInput('');
     setTimeout(() => inputRef.current?.focus(), 0);
+    onConversationReset?.();
   };
 
   const open = () => {
     setIsOpen(true);
     setHasOpenedOnce(true);
     setTimeout(() => inputRef.current?.focus(), 300);
+    onChatOpened?.();
   };
 
-  const close = () => setIsOpen(false);
+  const close = () => {
+    setIsOpen(false);
+    onChatClosed?.();
+  };
 
   const retryLastMessage = () => {
     const lastUserIdx = messages.map(m => m.role).lastIndexOf('user');

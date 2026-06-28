@@ -134,6 +134,31 @@ cloudtrain-chatbot[data-theme="dark"] {
 | `reveal-delay-ms` | Number | ❌ No    | Ms between each character in the streaming reveal animation. `0` (default) shows characters as they arrive; positive values produce a typewriter effect. |
 | `default-open`    | Boolean | ❌ No   | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
 
+### 🔹 Event Callbacks
+
+Subscribe to lifecycle events via React event props (CustomEvent under the hood — `e.detail` carries the payload):
+
+```jsx
+<CloudtrainChatbot
+  api-key="YOUR_API_KEY_HERE"
+  onChatOpened={() => console.log("opened")}
+  onChatClosed={() => console.log("closed")}
+  onMessageSent={(e) => console.log("sent:", e.detail.text)}
+  onMessageReceived={(e) => console.log("received:", e.detail.text)}
+  onConversationReset={() => console.log("reset")}
+  onErrorOccurred={(e) => console.error("error:", e.detail.message)}
+/>
+```
+
+| Prop | Detail | Fires when |
+|---|---|---|
+| `onChatOpened` | — | Chat panel opens |
+| `onChatClosed` | — | Chat panel closes |
+| `onMessageSent` | `{ text: string }` | User submits a message |
+| `onMessageReceived` | `{ text: string }` | A complete AI reply finishes streaming |
+| `onConversationReset` | — | User confirms "New chat" |
+| `onErrorOccurred` | `{ message: string }` | A chat request fails (excludes user-initiated aborts) |
+
 ---
 
 ## 🔑 How to Generate API Key

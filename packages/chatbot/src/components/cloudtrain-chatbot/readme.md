@@ -24,6 +24,18 @@
 | `welcomeSubtitle`     | `welcome-subtitle` |                                                                                                                                                                                                           | `string`                          | `undefined`                   |
 
 
+## Events
+
+| Event               | Description                                                                    | Type                                |
+| ------------------- | ------------------------------------------------------------------------------ | ----------------------------------- |
+| `chatClosed`        | Fired when the chat panel closes.                                              | `CustomEvent<void>`                 |
+| `chatOpened`        | Fired when the chat panel opens.                                               | `CustomEvent<void>`                 |
+| `conversationReset` | Fired when the user resets the conversation.                                   | `CustomEvent<void>`                 |
+| `errorOccurred`     | Fired when an error happens during send/stream. Detail: error message.         | `CustomEvent<{ message: string; }>` |
+| `messageReceived`   | Fired when a complete AI reply has finished streaming. Detail: the final text. | `CustomEvent<{ text: string; }>`    |
+| `messageSent`       | Fired when the user submits a message. Detail: the message text.               | `CustomEvent<{ text: string; }>`    |
+
+
 ----------------------------------------------
 
 *Built with [StencilJS](https://stenciljs.com/)*

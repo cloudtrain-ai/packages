@@ -141,6 +141,27 @@ Here’s a full example of the chatbot integrated into an HTML page:
 | `chatSuggestions`  | Array      | An array of strings used as chatbot prompts. |
 | `meta`             | Object     | Optional. A custom object sent to the AI model for context. |
 
+### 🔹 Events
+
+The component emits standard DOM `CustomEvent`s for lifecycle hooks:
+
+```js
+const chatbot = document.querySelector('cloudtrain-chatbot');
+
+chatbot.addEventListener('chatOpened', () => console.log('opened'));
+chatbot.addEventListener('messageSent', (e) => console.log('sent:', e.detail.text));
+chatbot.addEventListener('messageReceived', (e) => console.log('received:', e.detail.text));
+```
+
+| Event | Detail | Fires when |
+|---|---|---|
+| `chatOpened` | — | Chat panel opens |
+| `chatClosed` | — | Chat panel closes |
+| `messageSent` | `{ text: string }` | User submits a message |
+| `messageReceived` | `{ text: string }` | A complete AI reply finishes streaming |
+| `conversationReset` | — | User confirms "New chat" |
+| `errorOccurred` | `{ message: string }` | A chat request fails (excludes user-initiated aborts) |
+
 ---
 
 ## 🔑 How to Generate API Key

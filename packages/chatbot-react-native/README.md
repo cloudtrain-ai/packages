@@ -52,6 +52,23 @@ The component renders an absolutely-positioned FAB that opens a full-screen moda
 | `revealDelayMs`   | number   | ❌       | Ms between each character in the streaming reveal animation. `0` (default) shows characters as they arrive; positive values (e.g. `20`) produce a typewriter effect. |
 | `defaultOpen`     | boolean  | ❌       | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
 | `onError`         | `(error: unknown) => void` | ❌ | Called when a chat request fails (excludes user-initiated aborts). |
+| `onChatOpened`    | `() => void` | ❌ | Called when the chat panel opens. |
+| `onChatClosed`    | `() => void` | ❌ | Called when the chat panel closes. |
+| `onMessageSent`   | `(event: { text: string }) => void` | ❌ | Called when the user submits a message. |
+| `onMessageReceived` | `(event: { text: string }) => void` | ❌ | Called when a complete AI reply finishes streaming. |
+| `onConversationReset` | `() => void` | ❌ | Called when the user confirms "New chat". |
+
+### Event callback example
+
+```tsx
+<CloudtrainChatbot
+  apiKey="YOUR_API_KEY"
+  onChatOpened={() => analytics.track('Chatbot opened')}
+  onMessageSent={({ text }) => analytics.track('Message sent', { length: text.length })}
+  onMessageReceived={({ text }) => analytics.track('Reply received')}
+  onConversationReset={() => analytics.track('Conversation reset')}
+/>
+```
 
 ## Theming
 

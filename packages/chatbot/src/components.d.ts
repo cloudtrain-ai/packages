@@ -51,8 +51,28 @@ export namespace Components {
         "welcomeSubtitle"?: string;
     }
 }
+export interface CloudtrainChatbotCustomEvent<T> extends CustomEvent<T> {
+    detail: T;
+    target: HTMLCloudtrainChatbotElement;
+}
 declare global {
+    interface HTMLCloudtrainChatbotElementEventMap {
+        "chatOpened": void;
+        "chatClosed": void;
+        "messageSent": { text: string };
+        "messageReceived": { text: string };
+        "conversationReset": void;
+        "errorOccurred": { message: string };
+    }
     interface HTMLCloudtrainChatbotElement extends Components.CloudtrainChatbot, HTMLStencilElement {
+        addEventListener<K extends keyof HTMLCloudtrainChatbotElementEventMap>(type: K, listener: (this: HTMLCloudtrainChatbotElement, ev: CloudtrainChatbotCustomEvent<HTMLCloudtrainChatbotElementEventMap[K]>) => any, options?: boolean | AddEventListenerOptions): void;
+        addEventListener<K extends keyof DocumentEventMap>(type: K, listener: (this: Document, ev: DocumentEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void;
+        addEventListener<K extends keyof HTMLElementEventMap>(type: K, listener: (this: HTMLElement, ev: HTMLElementEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void;
+        addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void;
+        removeEventListener<K extends keyof HTMLCloudtrainChatbotElementEventMap>(type: K, listener: (this: HTMLCloudtrainChatbotElement, ev: CloudtrainChatbotCustomEvent<HTMLCloudtrainChatbotElementEventMap[K]>) => any, options?: boolean | EventListenerOptions): void;
+        removeEventListener<K extends keyof DocumentEventMap>(type: K, listener: (this: Document, ev: DocumentEventMap[K]) => any, options?: boolean | EventListenerOptions): void;
+        removeEventListener<K extends keyof HTMLElementEventMap>(type: K, listener: (this: HTMLElement, ev: HTMLElementEventMap[K]) => any, options?: boolean | EventListenerOptions): void;
+        removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void;
     }
     var HTMLCloudtrainChatbotElement: {
         prototype: HTMLCloudtrainChatbotElement;
@@ -88,6 +108,30 @@ declare namespace LocalJSX {
           * @default {}
          */
         "meta"?: Object;
+        /**
+          * Fired when the chat panel closes.
+         */
+        "onChatClosed"?: (event: CloudtrainChatbotCustomEvent<void>) => void;
+        /**
+          * Fired when the chat panel opens.
+         */
+        "onChatOpened"?: (event: CloudtrainChatbotCustomEvent<void>) => void;
+        /**
+          * Fired when the user resets the conversation.
+         */
+        "onConversationReset"?: (event: CloudtrainChatbotCustomEvent<void>) => void;
+        /**
+          * Fired when an error happens during send/stream. Detail: error message.
+         */
+        "onErrorOccurred"?: (event: CloudtrainChatbotCustomEvent<{ message: string }>) => void;
+        /**
+          * Fired when a complete AI reply has finished streaming. Detail: the final text.
+         */
+        "onMessageReceived"?: (event: CloudtrainChatbotCustomEvent<{ text: string }>) => void;
+        /**
+          * Fired when the user submits a message. Detail: the message text.
+         */
+        "onMessageSent"?: (event: CloudtrainChatbotCustomEvent<{ text: string }>) => void;
         /**
           * @default 'bottom-right'
          */

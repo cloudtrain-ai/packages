@@ -1,4 +1,4 @@
-import { Component, Element, Host, Prop, State, Watch, h } from '@stencil/core';
+import { Component, Element, Event, EventEmitter, Host, Prop, State, Watch, h } from '@stencil/core';
 import { cn } from '../../utils/utils';
 import Button from './/button';
 import X from './x';
@@ -68,6 +68,20 @@ export class CloudTrainChatbot {
    * Useful for demos, onboarding flows, or pages where engagement is desired.
    */
   @Prop() defaultOpen: boolean = false;
+
+  /** Fired when the chat panel opens. */
+  @Event({ eventName: 'chatOpened' }) chatOpened!: EventEmitter<void>;
+  /** Fired when the chat panel closes. */
+  @Event({ eventName: 'chatClosed' }) chatClosed!: EventEmitter<void>;
+  /** Fired when the user submits a message. Detail: the message text. */
+  @Event({ eventName: 'messageSent' }) messageSent!: EventEmitter<{ text: string }>;
+  /** Fired when a complete AI reply has finished streaming. Detail: the final text. */
+  @Event({ eventName: 'messageReceived' }) messageReceived!: EventEmitter<{ text: string }>;
+  /** Fired when the user resets the conversation. */
+  @Event({ eventName: 'conversationReset' }) conversationReset!: EventEmitter<void>;
+  /** Fired when an error happens during send/stream. Detail: error message. */
+  @Event({ eventName: 'errorOccurred' }) errorOccurred!: EventEmitter<{ message: string }>;
+
   @State() activeTheme: 'light' | 'dark' = 'light';
   @State() private fetchedName: string | null = null;
   @State() private fetchedAvatar: string | null = null;
@@ -246,11 +260,13 @@ export class CloudTrainChatbot {
           this.inputRef?.focus();
         }
       }, 350);
+      this.chatOpened.emit();
     } else {
       window.visualViewport?.removeEventListener('resize', this.handleViewportChange);
       window.visualViewport?.removeEventListener('scroll', this.handleViewportChange);
       if (this.panelRef) this.panelRef.style.removeProperty('--ct-kb-inset');
       this.unlockBodyScroll();
+      this.chatClosed.emit();
     }
   };
 
@@ -291,6 +307,7 @@ export class CloudTrainChatbot {
     this.messages = [];
     this.input = '';
     setTimeout(() => this.inputRef?.focus(), 0);
+    this.conversationReset.emit();
   };
 
   private retryLastMessage = () => {
@@ -328,6 +345,7 @@ export class CloudTrainChatbot {
       this.isStreaming = true;
       this.messages = [...this.messages, { content: message, role: 'user' }];
       this.scrollToBottom();
+      this.messageSent.emit({ text: message });
 
       const messages = this.messages.map((m) => ({
         role: (m.role === 'ai' ? 'assistant' : m.role) as 'user' | 'assistant',
@@ -343,6 +361,7 @@ export class CloudTrainChatbot {
       });
       await reveal.done;
       this.announcement = reveal.text;
+      this.messageReceived.emit({ text: reveal.text });
     } catch (error) {
       reveal.abort();
       const isAbort =
@@ -356,6 +375,8 @@ export class CloudTrainChatbot {
         this.messages = [...this.messages, { role: 'ai', content: 'Something went wrong.', isError: true }];
         this.announcement = 'Something went wrong.';
         this.scrollToBottom();
+        const errMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.errorOccurred.emit({ message: errMessage });
       }
     } finally {
       this.isLoading = false;
@@ -380,7 +401,7 @@ export class CloudTrainChatbot {
 
   private startChatWithSuggestion = (suggestion: string) => {
     this.input = suggestion;
-    this.onSubmit(new Event('submit'));
+    this.onSubmit(new window.Event('submit'));
   };
 
   private get displayName(): string {
