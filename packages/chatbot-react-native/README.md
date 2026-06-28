@@ -70,6 +70,26 @@ The component renders an absolutely-positioned FAB that opens a full-screen moda
 | `persistConversation` | boolean | ❌ | Persist the conversation in AsyncStorage so it survives app restarts. Defaults to `true`. Requires `@react-native-async-storage/async-storage` to be installed — silently no-ops without it. |
 | `persistTtlHours` | number | ❌ | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` for indefinite. |
 | `persistStorageKey` | string | ❌ | Override the AsyncStorage key. Defaults to `cloudtrain-chat`. Set distinct keys if running multiple chatbots. |
+| `requirePreChat`  | boolean | ❌ | Gate the conversation behind a pre-chat lead-capture form. No-op unless `preChatFields` is set. Defaults to `false`. |
+| `preChatFields`   | `PreChatField[]` | ❌ | Form fields. Each: `{name, label, type?, required?, placeholder?}`. Captured values are merged into `meta` automatically. |
+| `onLeadCaptured`  | `(lead: Record<string, string>) => void` | ❌ | Called when the user submits the pre-chat form. Receives the captured values. |
+
+### Pre-Chat Lead Capture
+
+```tsx
+<CloudtrainChatbot
+  apiKey="..."
+  requirePreChat
+  preChatFields={[
+    { name: 'name', label: 'Your name', required: true },
+    { name: 'email', label: 'Your email', type: 'email-address', required: true },
+    { name: 'company', label: 'Company', placeholder: 'Optional' },
+  ]}
+  onLeadCaptured={(lead) => analytics.identify(lead.email, lead)}
+/>
+```
+
+The form persists alongside the conversation (when AsyncStorage is available) so returning users don't re-fill. Resetting the conversation clears the captured lead.
 
 ### Persistence & Privacy
 

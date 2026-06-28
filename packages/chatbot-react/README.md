@@ -136,6 +136,25 @@ cloudtrain-chatbot[data-theme="dark"] {
 | `persist-conversation` | Boolean | ❌ No | Persist the conversation in `localStorage` so it survives page reloads. Defaults to `true`. |
 | `persist-ttl-hours` | Number | ❌ No  | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` for indefinite. |
 | `persist-storage-key` | String | ❌ No | Override the `localStorage` key. Defaults to `cloudtrain-chat`. Set distinct keys if running multiple chatbots on the same page. |
+| `require-pre-chat` | Boolean | ❌ No | Gate the conversation behind a pre-chat lead-capture form. No-op unless `preChatFields` is set. Defaults to `false`. |
+| `preChatFields` | `PreChatField[]` | ❌ No | Form fields. Each: `{name, label, type?, required?, placeholder?}`. Captured values are merged into `meta` automatically. |
+
+### 🔹 Pre-Chat Lead Capture
+
+```jsx
+<CloudtrainChatbot
+  api-key="..."
+  require-pre-chat={true}
+  preChatFields={[
+    { name: 'name', label: 'Your name', required: true },
+    { name: 'email', label: 'Your email', type: 'email', required: true },
+    { name: 'company', label: 'Company', placeholder: 'Optional' },
+  ]}
+  onLeadCaptured={(e) => console.log('Lead:', e.detail)}
+/>
+```
+
+The form persists alongside the conversation (when `persist-conversation` is on) so returning visitors don't re-fill. Resetting the conversation clears the captured lead.
 
 ### 🔹 Persistence & Privacy
 
@@ -176,6 +195,7 @@ Subscribe to lifecycle events via React event props (CustomEvent under the hood 
 | `onMessageReceived` | `{ text: string }` | A complete AI reply finishes streaming |
 | `onConversationReset` | — | User confirms "New chat" |
 | `onErrorOccurred` | `{ message: string }` | A chat request fails (excludes user-initiated aborts) |
+| `onLeadCaptured` | `Record<string, string>` | The pre-chat form is submitted |
 
 ---
 

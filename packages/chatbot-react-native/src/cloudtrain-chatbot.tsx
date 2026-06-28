@@ -83,6 +83,21 @@ import { ChatInput } from './components/chat-input';
 import { ChatIcon } from './icons';
 import { darkTheme, lightTheme, mergeTheme, type Theme } from './theme';
 
+export type PreChatField = {
+  /** Key used in the captured data + merged into `meta`. */
+  name: string;
+  /** Visible label shown above the input. */
+  label: string;
+  /** Input type. Defaults to `default`. */
+  type?: 'default' | 'email-address' | 'phone-pad';
+  /** Whether the field must be filled to submit. Defaults to `false`. */
+  required?: boolean;
+  /** Optional placeholder text. */
+  placeholder?: string;
+};
+
+type CapturedLead = Record<string, string>;
+
 export type CloudtrainChatbotProps = {
   apiKey: string;
   baseUrl?: string;
@@ -108,6 +123,19 @@ export type CloudtrainChatbotProps = {
   onMessageReceived?: (event: { text: string }) => void;
   /** Called when the user resets the conversation. */
   onConversationReset?: () => void;
+  /** Called when the user submits the pre-chat form. Receives the captured field values. */
+  onLeadCaptured?: (lead: CapturedLead) => void;
+  /**
+   * If true, gate the conversation behind a pre-chat form. Captured values
+   * are merged into `meta` so the AI sees the lead's context. Requires
+   * `preChatFields` to be non-empty — otherwise this flag is a no-op.
+   */
+  requirePreChat?: boolean;
+  /**
+   * Field configuration for the pre-chat lead-capture form.
+   * Example: [{ name: 'email', label: 'Your email', type: 'email-address', required: true }]
+   */
+  preChatFields?: PreChatField[];
   /**
    * Milliseconds between each character reveal in the streaming animation.
    * `0` (default) shows characters as fast as they arrive from the network.
@@ -159,6 +187,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     onMessageSent,
     onMessageReceived,
     onConversationReset,
+    onLeadCaptured,
+    requirePreChat = false,
+    preChatFields = [],
     revealDelayMs = 0,
     defaultOpen = false,
     persistConversation = true,
@@ -193,6 +224,15 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   const [fetched, setFetched] = useState<Agent | null>(null);
   const [fabAvatarLoaded, setFabAvatarLoaded] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [capturedLead, setCapturedLead] = useState<CapturedLead | null>(null);
+  const [preChatValues, setPreChatValues] = useState<CapturedLead>({});
+  const [preChatError, setPreChatError] = useState<string | null>(null);
+
+  const effectiveMeta = useMemo(
+    () => (capturedLead ? { ...meta, ...capturedLead } : meta),
+    [meta, capturedLead],
+  );
+  const isPreChatBlocking = requirePreChat && preChatFields.length > 0 && !capturedLead;
 
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -226,8 +266,13 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       .then((raw) => {
         if (cancelled || !raw) return;
         try {
-          const parsed = JSON.parse(raw) as { v?: number; savedAt?: number; messages?: Message[] };
-          if (parsed.v !== 1 || !Array.isArray(parsed.messages)) return;
+          const parsed = JSON.parse(raw) as {
+            v?: number;
+            savedAt?: number;
+            messages?: Message[];
+            lead?: CapturedLead;
+          };
+          if ((parsed.v !== 1 && parsed.v !== 2) || !Array.isArray(parsed.messages)) return;
           if (persistTtlHours > 0 && typeof parsed.savedAt === 'number') {
             const ageMs = Date.now() - parsed.savedAt;
             if (ageMs > persistTtlHours * 60 * 60 * 1000) {
@@ -237,6 +282,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
           }
           if (parsed.messages.length > 0) {
             setMessages(parsed.messages);
+          }
+          if (parsed.v === 2 && parsed.lead && typeof parsed.lead === 'object') {
+            setCapturedLead(parsed.lead);
           }
         } catch {
           // Corrupt entry — leave it; next save will overwrite.
@@ -248,16 +296,18 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     };
   }, [persistenceEnabled, storageKey, persistTtlHours]);
 
-  const persistMessages = (msgs: Message[]) => {
+  const persist = (msgs: Message[], lead: CapturedLead | null) => {
     if (!persistenceEnabled || !asyncStorage) return;
-    if (msgs.length === 0) {
+    if (msgs.length === 0 && !lead) {
       asyncStorage.removeItem(storageKey).catch(() => {});
       return;
     }
     asyncStorage
-      .setItem(storageKey, JSON.stringify({ v: 1, savedAt: Date.now(), messages: msgs }))
+      .setItem(storageKey, JSON.stringify({ v: 2, savedAt: Date.now(), messages: msgs, lead: lead ?? undefined }))
       .catch(() => {});
   };
+
+  const persistMessages = (msgs: Message[]) => persist(msgs, capturedLead);
 
   useEffect(() => {
     if (hasOpenedOnce || isOpen) return;
@@ -314,7 +364,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       if (streamingFetch) {
         await client.chatStream({
           messages: apiMessages,
-          meta,
+          meta: effectiveMeta,
           signal: controller.signal,
           onChunk: (chunk) => reveal.feed(chunk),
           onComplete: () => reveal.complete(),
@@ -322,7 +372,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       } else {
         // Bare RN fallback: non-streaming chat() + feed the full response
         // into StreamReveal so the char-paced animation still plays.
-        const result = await client.chat({ messages: apiMessages, meta, signal: controller.signal });
+        const result = await client.chat({ messages: apiMessages, meta: effectiveMeta, signal: controller.signal });
         reveal.feed(result.choices[0]?.message?.content ?? '');
         reveal.complete();
       }
@@ -380,9 +430,32 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     if (isStreaming && abortRef.current) abortRef.current.abort();
     setMessages([]);
     setInput('');
-    persistMessages([]);
+    setCapturedLead(null);
+    setPreChatValues({});
+    setPreChatError(null);
+    persist([], null);
     setTimeout(() => inputRef.current?.focus(), 0);
     onConversationReset?.();
+  };
+
+  const submitPreChat = () => {
+    const missing = preChatFields
+      .filter((f) => f.required && !(preChatValues[f.name] ?? '').trim())
+      .map((f) => f.label);
+    if (missing.length > 0) {
+      setPreChatError(`Please fill in: ${missing.join(', ')}`);
+      return;
+    }
+    const captured: CapturedLead = {};
+    for (const field of preChatFields) {
+      const v = (preChatValues[field.name] ?? '').trim();
+      if (v) captured[field.name] = v;
+    }
+    setCapturedLead(captured);
+    setPreChatError(null);
+    persist(messages, captured);
+    onLeadCaptured?.(captured);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const open = () => {
@@ -455,7 +528,66 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
             onReset={messages.length > 0 ? requestReset : undefined}
           />
 
-          {messages.length === 0 ? (
+          {messages.length === 0 && isPreChatBlocking ? (
+            <ScrollView contentContainerStyle={styles.emptyContent} keyboardShouldPersistTaps="handled">
+              <View style={styles.preChatInner}>
+                <View style={[styles.avatarLg, { backgroundColor: theme.primary }]}>
+                  {displayAvatar ? (
+                    <Image source={{ uri: displayAvatar }} style={styles.avatarLg} resizeMode="cover" />
+                  ) : (
+                    <View style={{ transform: [{ translateY: 3 }] }}>
+                      <ChatIcon size={24} color={theme.messageIcon} />
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.welcome, { color: theme.foreground }]}>{welcomeMessage}</Text>
+                <Text style={[styles.welcomeSub, { color: theme.mutedForeground }]}>
+                  {welcomeSubtitle ?? 'Tell us a bit about you to get started.'}
+                </Text>
+                <View style={styles.preChatFields}>
+                  {preChatFields.map((field) => (
+                    <View key={field.name} style={styles.preChatField}>
+                      <Text style={[styles.preChatLabel, { color: theme.foreground }]}>
+                        {field.label}
+                        {field.required ? <Text style={{ color: theme.destructive }}> *</Text> : null}
+                      </Text>
+                      <TextInput
+                        value={preChatValues[field.name] ?? ''}
+                        onChangeText={(text) => {
+                          setPreChatValues((prev) => ({ ...prev, [field.name]: text }));
+                          if (preChatError) setPreChatError(null);
+                        }}
+                        placeholder={field.placeholder}
+                        placeholderTextColor={theme.mutedForeground}
+                        keyboardType={field.type === 'email-address' ? 'email-address' : field.type === 'phone-pad' ? 'phone-pad' : 'default'}
+                        autoCapitalize={field.type === 'email-address' ? 'none' : 'sentences'}
+                        style={[
+                          styles.preChatInput,
+                          {
+                            color: theme.foreground,
+                            borderColor: theme.border,
+                            backgroundColor: theme.background,
+                          },
+                        ]}
+                      />
+                    </View>
+                  ))}
+                  {preChatError && (
+                    <Text style={[styles.preChatError, { color: theme.destructive }]}>{preChatError}</Text>
+                  )}
+                </View>
+                <Pressable
+                  onPress={submitPreChat}
+                  style={({ pressed }) => [
+                    styles.preChatSubmit,
+                    { backgroundColor: pressed ? theme.primary + 'd9' : theme.primary },
+                  ]}
+                >
+                  <Text style={[styles.preChatSubmitText, { color: theme.primaryForeground }]}>Continue</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          ) : messages.length === 0 ? (
             <ScrollView contentContainerStyle={styles.emptyContent} keyboardShouldPersistTaps="handled">
               <View style={styles.emptyInner}>
                 <View style={[styles.avatarLg, { backgroundColor: theme.primary }]}>
@@ -526,15 +658,17 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
           )}
 
           <View style={styles.inputWrap}>
-            <ChatInput
-              ref={inputRef}
-              value={input}
-              onChange={setInput}
-              onSubmit={onSubmit}
-              onStop={onStop}
-              isStreaming={isStreaming}
-              theme={theme}
-            />
+            {!isPreChatBlocking && (
+              <ChatInput
+                ref={inputRef}
+                value={input}
+                onChange={setInput}
+                onSubmit={onSubmit}
+                onStop={onStop}
+                isStreaming={isStreaming}
+                theme={theme}
+              />
+            )}
             {!hideBranding && (
               <Pressable onPress={() => Linking.openURL('https://cloudtrain.ai')}>
                 <Text style={[styles.poweredBy, { color: theme.mutedForeground, borderTopColor: theme.border }]}>
@@ -636,6 +770,46 @@ const styles = StyleSheet.create({
     paddingTop: 40,
     paddingHorizontal: 16,
     gap: 16,
+  },
+  preChatInner: {
+    flex: 1,
+    alignItems: 'stretch',
+    paddingTop: 32,
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  preChatFields: {
+    gap: 12,
+    marginTop: 8,
+  },
+  preChatField: {
+    gap: 6,
+  },
+  preChatLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  preChatInput: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: 14,
+  },
+  preChatError: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  preChatSubmit: {
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  preChatSubmitText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   avatarLg: {
     width: 56,

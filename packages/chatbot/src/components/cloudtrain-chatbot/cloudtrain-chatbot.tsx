@@ -17,6 +17,21 @@ type Message = {
   isError?: boolean;
 };
 
+export type PreChatField = {
+  /** Key used in the captured data + merged into `meta`. */
+  name: string;
+  /** Visible label shown above/in the input. */
+  label: string;
+  /** Input type. Defaults to `text`. */
+  type?: 'text' | 'email' | 'tel';
+  /** Whether the field must be filled to submit. Defaults to `false`. */
+  required?: boolean;
+  /** Optional placeholder text. */
+  placeholder?: string;
+};
+
+type CapturedLead = Record<string, string>;
+
 const chatConfig = {
   dimensions: {
     sm: 'sm:max-w-sm sm:max-h-[500px]',
@@ -83,6 +98,19 @@ export class CloudTrainChatbot {
    * Defaults to `cloudtrain-chat:<apiKey-suffix>` for per-agent isolation.
    */
   @Prop() persistStorageKey?: string;
+  /**
+   * If true, gate the conversation behind a pre-chat form. Captured values
+   * are merged into `meta` so the AI sees the lead's context. Requires
+   * `preChatFields` to be non-empty — otherwise this flag is a no-op.
+   */
+  @Prop() requirePreChat: boolean = false;
+  /**
+   * Field configuration for the pre-chat lead-capture form. Each field
+   * renders as an input; required fields must be filled to submit.
+   *
+   * Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
+   */
+  @Prop() preChatFields: PreChatField[] = [];
 
   /** Fired when the chat panel opens. */
   @Event({ eventName: 'chatOpened' }) chatOpened!: EventEmitter<void>;
@@ -96,6 +124,8 @@ export class CloudTrainChatbot {
   @Event({ eventName: 'conversationReset' }) conversationReset!: EventEmitter<void>;
   /** Fired when an error happens during send/stream. Detail: error message. */
   @Event({ eventName: 'errorOccurred' }) errorOccurred!: EventEmitter<{ message: string }>;
+  /** Fired when the pre-chat lead form is submitted. Detail: the captured field values. */
+  @Event({ eventName: 'leadCaptured' }) leadCaptured!: EventEmitter<CapturedLead>;
 
   @State() activeTheme: 'light' | 'dark' = 'light';
   @State() private fetchedName: string | null = null;
@@ -113,6 +143,9 @@ export class CloudTrainChatbot {
   @State() private input: string = '';
   @State() private messages: Message[] = [];
   @State() private confirmingReset = false;
+  @State() private capturedLead: CapturedLead | null = null;
+  @State() private preChatValues: CapturedLead = {};
+  @State() private preChatError: string | null = null;
 
   private messagesRef: HTMLDivElement | null = null;
   private inputRef: HTMLInputElement | null = null;
@@ -136,15 +169,22 @@ export class CloudTrainChatbot {
     return this.persistStorageKey ?? 'cloudtrain-chat';
   }
 
-  private loadPersistedMessages(): Message[] | null {
+  private loadPersisted(): { messages: Message[]; lead: CapturedLead | null } | null {
     if (!this.persistConversation || typeof window === 'undefined' || !window.localStorage) {
       return null;
     }
     try {
       const raw = window.localStorage.getItem(this.storageKey);
       if (!raw) return null;
-      const parsed = JSON.parse(raw) as { v?: number; savedAt?: number; messages?: Message[] };
-      if (parsed.v !== 1 || !Array.isArray(parsed.messages)) return null;
+      const parsed = JSON.parse(raw) as {
+        v?: number;
+        savedAt?: number;
+        messages?: Message[];
+        lead?: CapturedLead;
+      };
+      if ((parsed.v !== 1 && parsed.v !== 2) || !Array.isArray(parsed.messages)) {
+        return null;
+      }
       if (this.persistTtlHours > 0 && typeof parsed.savedAt === 'number') {
         const ageMs = Date.now() - parsed.savedAt;
         if (ageMs > this.persistTtlHours * 60 * 60 * 1000) {
@@ -152,28 +192,44 @@ export class CloudTrainChatbot {
           return null;
         }
       }
-      return parsed.messages;
+      const lead = parsed.v === 2 && parsed.lead && typeof parsed.lead === 'object' ? parsed.lead : null;
+      return { messages: parsed.messages, lead };
     } catch {
       return null;
     }
   }
 
-  private persistMessages(messages: Message[]): void {
+  private persist(messages: Message[], lead: CapturedLead | null): void {
     if (!this.persistConversation || typeof window === 'undefined' || !window.localStorage) {
       return;
     }
     try {
-      if (messages.length === 0) {
+      if (messages.length === 0 && !lead) {
         window.localStorage.removeItem(this.storageKey);
         return;
       }
       window.localStorage.setItem(
         this.storageKey,
-        JSON.stringify({ v: 1, savedAt: Date.now(), messages }),
+        JSON.stringify({ v: 2, savedAt: Date.now(), messages, lead: lead ?? undefined }),
       );
     } catch {
       // Quota exceeded, storage disabled, etc. — fail silently.
     }
+  }
+
+  private persistMessages(messages: Message[]): void {
+    this.persist(messages, this.capturedLead);
+  }
+
+  private get effectiveMeta(): Record<string, unknown> {
+    const base = this.meta as Record<string, unknown>;
+    return this.capturedLead ? { ...base, ...this.capturedLead } : base;
+  }
+
+  private get isPreChatBlocking(): boolean {
+    return this.requirePreChat
+      && this.preChatFields.length > 0
+      && !this.capturedLead;
   }
 
   componentWillLoad() {
@@ -184,9 +240,10 @@ export class CloudTrainChatbot {
     if (!this.botName || !this.avatarUrl) {
       this.loadAgent();
     }
-    const persisted = this.loadPersistedMessages();
-    if (persisted && persisted.length > 0) {
-      this.messages = persisted;
+    const persisted = this.loadPersisted();
+    if (persisted) {
+      if (persisted.messages.length > 0) this.messages = persisted.messages;
+      if (persisted.lead) this.capturedLead = persisted.lead;
     }
     if (this.defaultOpen) {
       // Defer to after first render so the open transition plays.
@@ -369,9 +426,38 @@ export class CloudTrainChatbot {
     }
     this.messages = [];
     this.input = '';
-    this.persistMessages([]);
+    this.capturedLead = null;
+    this.preChatValues = {};
+    this.preChatError = null;
+    this.persist([], null);
     setTimeout(() => this.inputRef?.focus(), 0);
     this.conversationReset.emit();
+  };
+
+  private updatePreChatField = (name: string, value: string) => {
+    this.preChatValues = { ...this.preChatValues, [name]: value };
+    if (this.preChatError) this.preChatError = null;
+  };
+
+  private submitPreChat = (e: Event) => {
+    e.preventDefault();
+    const missing = this.preChatFields
+      .filter((f) => f.required && !(this.preChatValues[f.name] ?? '').trim())
+      .map((f) => f.label);
+    if (missing.length > 0) {
+      this.preChatError = `Please fill in: ${missing.join(', ')}`;
+      return;
+    }
+    const captured: CapturedLead = {};
+    for (const field of this.preChatFields) {
+      const v = (this.preChatValues[field.name] ?? '').trim();
+      if (v) captured[field.name] = v;
+    }
+    this.capturedLead = captured;
+    this.preChatError = null;
+    this.persist(this.messages, captured);
+    this.leadCaptured.emit(captured);
+    setTimeout(() => this.inputRef?.focus(), 50);
   };
 
   private retryLastMessage = () => {
@@ -418,7 +504,7 @@ export class CloudTrainChatbot {
 
       await this.client.chatStream({
         messages,
-        meta: this.meta as Record<string, unknown>,
+        meta: this.effectiveMeta,
         signal: controller.signal,
         onChunk: (chunk) => reveal.feed(chunk),
         onComplete: () => reveal.complete(),
@@ -563,6 +649,51 @@ export class CloudTrainChatbot {
                 >
                   {inputForm}
                 </div>
+                <ChatFooter hideBranding={this.hideBranding} />
+              </div>
+            ) : this.isPreChatBlocking ? (
+              <div class="flex flex-col flex-1 min-h-0">
+                <form
+                  onSubmit={this.submitPreChat}
+                  class="flex-1 min-h-0 flex flex-col items-stretch justify-start gap-4 px-4 pt-8 pb-4 overflow-y-auto overscroll-contain"
+                >
+                  <div class="flex flex-col items-center gap-3">
+                    <Avatar src={this.displayAvatar} alt={this.displayName} size="lg" />
+                    <div class="text-center space-y-1">
+                      <h4 class="text-[16px] font-semibold">{this.welcomeMessage}</h4>
+                      <p class="text-sm text-muted-foreground">
+                        {this.welcomeSubtitle ?? 'Tell us a bit about you to get started.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-3">
+                    {this.preChatFields.map((field) => (
+                      <label key={field.name} class="flex flex-col gap-1 text-sm">
+                        <span class="font-medium">
+                          {field.label}
+                          {field.required && <span class="text-destructive ml-1" aria-hidden="true">*</span>}
+                        </span>
+                        <Input
+                          type={field.type ?? 'text'}
+                          name={field.name}
+                          value={this.preChatValues[field.name] ?? ''}
+                          required={field.required}
+                          placeholder={field.placeholder}
+                          onInput={(e: Event) =>
+                            this.updatePreChatField(field.name, (e.target as HTMLInputElement).value)
+                          }
+                          class="px-3 py-2 rounded-md border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </label>
+                    ))}
+                    {this.preChatError && (
+                      <p class="text-sm text-destructive" role="alert">{this.preChatError}</p>
+                    )}
+                  </div>
+                  <Button type="submit" variant="default" class="self-stretch h-10 rounded-md">
+                    Continue
+                  </Button>
+                </form>
                 <ChatFooter hideBranding={this.hideBranding} />
               </div>
             ) : (
