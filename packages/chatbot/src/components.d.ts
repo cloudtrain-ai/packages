@@ -32,6 +32,20 @@ export namespace Components {
          */
         "meta": Object;
         /**
+          * Persist the conversation in localStorage so it survives page reloads and navigations. Set to `false` to disable persistence entirely.
+          * @default true
+         */
+        "persistConversation": boolean;
+        /**
+          * Override the localStorage key used to persist the conversation. Defaults to `cloudtrain-chat:<apiKey-suffix>` for per-agent isolation.
+         */
+        "persistStorageKey"?: string;
+        /**
+          * How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to 7 days. Pass `0` to keep indefinitely.
+          * @default 24 * 7
+         */
+        "persistTtlHours": number;
+        /**
           * @default 'bottom-right'
          */
         "position": 'bottom-right' | 'bottom-left';
@@ -132,6 +146,20 @@ declare namespace LocalJSX {
           * Fired when the user submits a message. Detail: the message text.
          */
         "onMessageSent"?: (event: CloudtrainChatbotCustomEvent<{ text: string }>) => void;
+        /**
+          * Persist the conversation in localStorage so it survives page reloads and navigations. Set to `false` to disable persistence entirely.
+          * @default true
+         */
+        "persistConversation"?: boolean;
+        /**
+          * Override the localStorage key used to persist the conversation. Defaults to `cloudtrain-chat:<apiKey-suffix>` for per-agent isolation.
+         */
+        "persistStorageKey"?: string;
+        /**
+          * How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to 7 days. Pass `0` to keep indefinitely.
+          * @default 24 * 7
+         */
+        "persistTtlHours"?: number;
         /**
           * @default 'bottom-right'
          */

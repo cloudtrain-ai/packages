@@ -68,6 +68,21 @@ export class CloudTrainChatbot {
    * Useful for demos, onboarding flows, or pages where engagement is desired.
    */
   @Prop() defaultOpen: boolean = false;
+  /**
+   * Persist the conversation in localStorage so it survives page reloads
+   * and navigations. Set to `false` to disable persistence entirely.
+   */
+  @Prop() persistConversation: boolean = true;
+  /**
+   * How long (in hours) to keep a persisted conversation before discarding
+   * on next load. Defaults to 7 days. Pass `0` to keep indefinitely.
+   */
+  @Prop() persistTtlHours: number = 24 * 7;
+  /**
+   * Override the localStorage key used to persist the conversation.
+   * Defaults to `cloudtrain-chat:<apiKey-suffix>` for per-agent isolation.
+   */
+  @Prop() persistStorageKey?: string;
 
   /** Fired when the chat panel opens. */
   @Event({ eventName: 'chatOpened' }) chatOpened!: EventEmitter<void>;
@@ -117,6 +132,50 @@ export class CloudTrainChatbot {
     return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
   }
 
+  private get storageKey(): string {
+    return this.persistStorageKey ?? 'cloudtrain-chat';
+  }
+
+  private loadPersistedMessages(): Message[] | null {
+    if (!this.persistConversation || typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
+    try {
+      const raw = window.localStorage.getItem(this.storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { v?: number; savedAt?: number; messages?: Message[] };
+      if (parsed.v !== 1 || !Array.isArray(parsed.messages)) return null;
+      if (this.persistTtlHours > 0 && typeof parsed.savedAt === 'number') {
+        const ageMs = Date.now() - parsed.savedAt;
+        if (ageMs > this.persistTtlHours * 60 * 60 * 1000) {
+          window.localStorage.removeItem(this.storageKey);
+          return null;
+        }
+      }
+      return parsed.messages;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistMessages(messages: Message[]): void {
+    if (!this.persistConversation || typeof window === 'undefined' || !window.localStorage) {
+      return;
+    }
+    try {
+      if (messages.length === 0) {
+        window.localStorage.removeItem(this.storageKey);
+        return;
+      }
+      window.localStorage.setItem(
+        this.storageKey,
+        JSON.stringify({ v: 1, savedAt: Date.now(), messages }),
+      );
+    } catch {
+      // Quota exceeded, storage disabled, etc. — fail silently.
+    }
+  }
+
   componentWillLoad() {
     this.activeTheme = this.getTheme(this.theme);
     this.client = new CloudTrain({ apiKey: this.apiKey, baseUrl: this.baseUrl });
@@ -124,6 +183,10 @@ export class CloudTrainChatbot {
     // provided via props — the API call is purely to fill in the missing piece.
     if (!this.botName || !this.avatarUrl) {
       this.loadAgent();
+    }
+    const persisted = this.loadPersistedMessages();
+    if (persisted && persisted.length > 0) {
+      this.messages = persisted;
     }
     if (this.defaultOpen) {
       // Defer to after first render so the open transition plays.
@@ -306,6 +369,7 @@ export class CloudTrainChatbot {
     }
     this.messages = [];
     this.input = '';
+    this.persistMessages([]);
     setTimeout(() => this.inputRef?.focus(), 0);
     this.conversationReset.emit();
   };
@@ -361,6 +425,7 @@ export class CloudTrainChatbot {
       });
       await reveal.done;
       this.announcement = reveal.text;
+      this.persistMessages(this.messages);
       this.messageReceived.emit({ text: reveal.text });
     } catch (error) {
       reveal.abort();

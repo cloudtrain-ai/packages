@@ -134,12 +134,38 @@ Here’s a full example of the chatbot integrated into an HTML page:
 | `position`         | "bottom-right" \| "bottom-left" | ❌ No | Corner of the viewport where the FAB and panel anchor. Defaults to `bottom-right`. |
 | `reveal-delay-ms`  | Number | ❌ No    | Milliseconds between each character in the streaming reveal animation. `0` (default) shows characters as fast as they arrive. A positive value (e.g. `20`) produces a typewriter effect. |
 | `default-open`     | Boolean | ❌ No   | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
+| `persist-conversation` | Boolean | ❌ No | Persist the conversation in `localStorage` so it survives page reloads. Defaults to `true`. Set to `false` to disable. |
+| `persist-ttl-hours` | Number | ❌ No   | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` to keep indefinitely. |
+| `persist-storage-key` | String | ❌ No  | Override the `localStorage` key. Defaults to `cloudtrain-chat`. Set distinct keys if you run multiple chatbots on the same page. |
 
 ### 🔹 Properties
 | Property           | Type       | Description                                   |
 |--------------------|------------|-----------------------------------------------|
 | `chatSuggestions`  | Array      | An array of strings used as chatbot prompts. |
 | `meta`             | Object     | Optional. A custom object sent to the AI model for context. |
+
+### 🔹 Persistence & Privacy
+
+By default the chatbot persists the user's conversation in `localStorage` so it survives page reloads. This is the same model used by Intercom, Crisp, Drift, and other widget providers.
+
+**Important — disclose this in your privacy policy.** As the website owner you are the data controller; the persisted messages live in your visitor's browser on your origin. On shared devices, the next visitor to open the same browser profile will see the prior conversation until it's reset or expires.
+
+If your jurisdiction or compliance posture requires it:
+
+```html
+<!-- Disable entirely -->
+<cloudtrain-chatbot api-key="..." persist-conversation="false"></cloudtrain-chatbot>
+
+<!-- Only persist when the visitor has consented -->
+<cloudtrain-chatbot api-key="..." id="bot"></cloudtrain-chatbot>
+<script>
+  document.getElementById('bot').persistConversation = window.userHasConsented === true;
+</script>
+```
+
+Conversations auto-expire after the configured `persist-ttl-hours` (default 7 days) on the next page load.
+
+---
 
 ### 🔹 Events
 

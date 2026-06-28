@@ -10,6 +10,16 @@ npm install @cloudtrain/chatbot-react-native @cloudtrain/sdk react-native-svg re
 
 Peer dependencies: `react`, `react-native`, `react-native-svg`, `react-native-markdown-display`, `react-native-safe-area-context`.
 
+### Optional: conversation persistence
+
+To persist conversations across app restarts, also install:
+
+```sh
+npm install @react-native-async-storage/async-storage
+```
+
+Without it, the chatbot still works — conversations just don't survive a restart.
+
 ### Streaming
 
 For **live character-by-character streaming**, the chatbot uses [`expo/fetch`](https://docs.expo.dev/versions/latest/sdk/expo/#fetch) when available (Expo SDK 51+). It's picked up automatically — no code changes required.
@@ -57,6 +67,30 @@ The component renders an absolutely-positioned FAB that opens a full-screen moda
 | `onMessageSent`   | `(event: { text: string }) => void` | ❌ | Called when the user submits a message. |
 | `onMessageReceived` | `(event: { text: string }) => void` | ❌ | Called when a complete AI reply finishes streaming. |
 | `onConversationReset` | `() => void` | ❌ | Called when the user confirms "New chat". |
+| `persistConversation` | boolean | ❌ | Persist the conversation in AsyncStorage so it survives app restarts. Defaults to `true`. Requires `@react-native-async-storage/async-storage` to be installed — silently no-ops without it. |
+| `persistTtlHours` | number | ❌ | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` for indefinite. |
+| `persistStorageKey` | string | ❌ | Override the AsyncStorage key. Defaults to `cloudtrain-chat`. Set distinct keys if running multiple chatbots. |
+
+### Persistence & Privacy
+
+Conversations are persisted to AsyncStorage by default so the user can come back to an in-progress chat. **Requires** the optional peer dep:
+
+```sh
+npm install @react-native-async-storage/async-storage
+```
+
+If the dep isn't installed, persistence silently no-ops (no crash) and behaves as if `persistConversation={false}` was set.
+
+As the app owner you are the data controller — disclose persistence in your privacy policy and gate it via your existing consent flow when required:
+
+```tsx
+<CloudtrainChatbot
+  apiKey="..."
+  persistConversation={userHasConsented}
+/>
+```
+
+On shared devices, the next user opening the app will see the prior conversation until it's reset or expires (`persistTtlHours`, default 7 days).
 
 ### Event callback example
 

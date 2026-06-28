@@ -58,6 +58,25 @@ try {
 } catch {
   streamingFetch = undefined;
 }
+
+// Try to use @react-native-async-storage/async-storage for conversation
+// persistence. Optional peer dep — if not installed, persistence silently no-ops.
+type AsyncStorageLike = {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
+};
+let asyncStorage: AsyncStorageLike | undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const m: any = require('@react-native-async-storage/async-storage');
+  const candidate = m?.default ?? m;
+  if (candidate && typeof candidate.getItem === 'function') {
+    asyncStorage = candidate as AsyncStorageLike;
+  }
+} catch {
+  asyncStorage = undefined;
+}
 import { ChatHeader } from './components/chat-header';
 import { ChatBubble, type Message } from './components/chat-bubble';
 import { ChatInput } from './components/chat-input';
@@ -100,6 +119,22 @@ export type CloudtrainChatbotProps = {
    * Useful for demos, onboarding flows, or pages where engagement is desired.
    */
   defaultOpen?: boolean;
+  /**
+   * Persist the conversation in AsyncStorage so it survives app restarts.
+   * Requires `@react-native-async-storage/async-storage` to be installed.
+   * Defaults to `true`; silently no-ops if AsyncStorage is not available.
+   */
+  persistConversation?: boolean;
+  /**
+   * How long (in hours) to keep a persisted conversation before discarding
+   * on next load. Defaults to 7 days. Pass `0` to keep indefinitely.
+   */
+  persistTtlHours?: number;
+  /**
+   * Override the AsyncStorage key used to persist the conversation.
+   * Defaults to `cloudtrain-chat`.
+   */
+  persistStorageKey?: string;
 };
 
 const DEFAULT_WELCOME = 'How can I help you today?';
@@ -126,7 +161,13 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     onConversationReset,
     revealDelayMs = 0,
     defaultOpen = false,
+    persistConversation = true,
+    persistTtlHours = 24 * 7,
+    persistStorageKey,
   } = props;
+
+  const storageKey = persistStorageKey ?? 'cloudtrain-chat';
+  const persistenceEnabled = persistConversation && !!asyncStorage;
 
   const hookScheme = useColorScheme();
   const systemScheme = hookScheme ?? Appearance.getColorScheme();
@@ -176,6 +217,47 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       cancelled = true;
     };
   }, [client, botName, avatarUrl]);
+
+  useEffect(() => {
+    if (!persistenceEnabled || !asyncStorage) return;
+    let cancelled = false;
+    asyncStorage
+      .getItem(storageKey)
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        try {
+          const parsed = JSON.parse(raw) as { v?: number; savedAt?: number; messages?: Message[] };
+          if (parsed.v !== 1 || !Array.isArray(parsed.messages)) return;
+          if (persistTtlHours > 0 && typeof parsed.savedAt === 'number') {
+            const ageMs = Date.now() - parsed.savedAt;
+            if (ageMs > persistTtlHours * 60 * 60 * 1000) {
+              asyncStorage!.removeItem(storageKey).catch(() => {});
+              return;
+            }
+          }
+          if (parsed.messages.length > 0) {
+            setMessages(parsed.messages);
+          }
+        } catch {
+          // Corrupt entry — leave it; next save will overwrite.
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [persistenceEnabled, storageKey, persistTtlHours]);
+
+  const persistMessages = (msgs: Message[]) => {
+    if (!persistenceEnabled || !asyncStorage) return;
+    if (msgs.length === 0) {
+      asyncStorage.removeItem(storageKey).catch(() => {});
+      return;
+    }
+    asyncStorage
+      .setItem(storageKey, JSON.stringify({ v: 1, savedAt: Date.now(), messages: msgs }))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (hasOpenedOnce || isOpen) return;
@@ -245,6 +327,11 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         reveal.complete();
       }
       await reveal.done;
+      persistMessages([
+        ...messages,
+        { role: 'user', content: message },
+        { role: 'ai', content: reveal.text },
+      ]);
       onMessageReceived?.({ text: reveal.text });
     } catch (error) {
       const isAbort =
@@ -256,7 +343,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         setMessages(prev => {
           const last = prev[prev.length - 1];
           const base = last?.role === 'ai' ? prev.slice(0, -1) : prev;
-          return [...base, { role: 'ai', content: 'Something went wrong.', isError: true }];
+          const next: Message[] = [...base, { role: 'ai', content: 'Something went wrong.', isError: true }];
+          persistMessages(next);
+          return next;
         });
         scrollToBottom();
       }
@@ -291,6 +380,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     if (isStreaming && abortRef.current) abortRef.current.abort();
     setMessages([]);
     setInput('');
+    persistMessages([]);
     setTimeout(() => inputRef.current?.focus(), 0);
     onConversationReset?.();
   };

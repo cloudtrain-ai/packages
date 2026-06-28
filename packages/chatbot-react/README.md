@@ -133,6 +133,24 @@ cloudtrain-chatbot[data-theme="dark"] {
 | `position`        | "bottom-right" \| "bottom-left" | ❌ No | Corner of the viewport where the FAB and panel anchor. Defaults to `bottom-right`. |
 | `reveal-delay-ms` | Number | ❌ No    | Ms between each character in the streaming reveal animation. `0` (default) shows characters as they arrive; positive values produce a typewriter effect. |
 | `default-open`    | Boolean | ❌ No   | If `true`, the chat panel opens automatically on mount. Defaults to `false`. |
+| `persist-conversation` | Boolean | ❌ No | Persist the conversation in `localStorage` so it survives page reloads. Defaults to `true`. |
+| `persist-ttl-hours` | Number | ❌ No  | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` for indefinite. |
+| `persist-storage-key` | String | ❌ No | Override the `localStorage` key. Defaults to `cloudtrain-chat`. Set distinct keys if running multiple chatbots on the same page. |
+
+### 🔹 Persistence & Privacy
+
+The chatbot persists conversations in `localStorage` by default. As the site owner you are the data controller — disclose this in your privacy policy and gate it via your existing consent flow when required:
+
+```jsx
+<CloudtrainChatbot
+  api-key="YOUR_API_KEY_HERE"
+  persist-conversation={userHasConsented}
+/>
+```
+
+On shared devices the next visitor opening the same browser profile will see prior conversations until reset or expiry (`persist-ttl-hours`, default 7 days). To disable entirely, pass `persist-conversation={false}`.
+
+---
 
 ### 🔹 Event Callbacks
 
