@@ -30,7 +30,7 @@ export type PreChatField = {
   placeholder?: string;
 };
 
-type CapturedLead = Record<string, string>;
+export type CapturedLead = Record<string, string>;
 
 const chatConfig = {
   dimensions: {

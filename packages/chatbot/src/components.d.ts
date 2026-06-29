@@ -5,8 +5,8 @@
  * It contains typing information for all components that exist in this project.
  */
 import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
-import { PreChatField } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
-export { PreChatField } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
+import { CapturedLead, PreChatField } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
+export { CapturedLead, PreChatField } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
 export namespace Components {
     interface CloudtrainChatbot {
         "apiKey": string;
