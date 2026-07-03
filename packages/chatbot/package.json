@@ -55,23 +55,22 @@
     "publish-package": "npm publish --access public"
   },
   "devDependencies": {
-    "@stencil/core": "~4.38.0",
-    "@stencil/react-output-target": "~1.0.3",
-    "@tailwindcss/postcss": "^4.3.0",
+    "@stencil/core": "~4.43.5",
+    "@stencil/react-output-target": "~1.6.0",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.7.0",
+    "@types/node": "^26.1.0",
     "jest": "^30.4.2",
     "jest-cli": "^30.4.2",
-    "puppeteer": "^24.43.1",
-    "stencil-tailwind-plugin": "^2.0.5",
-    "tailwindcss": "^4.3.0"
+    "stencil-tailwind-plugin": "^2.0.6",
+    "tailwindcss": "^4.3.2"
   },
   "license": "MIT",
   "dependencies": {
     "@cloudtrain/sdk": "*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "marked": "^18.0.3",
+    "marked": "^18.0.5",
     "stencil-click-outside": "^1.8.0",
     "tailwind-merge": "^3.6.0"
   }

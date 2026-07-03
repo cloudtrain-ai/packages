@@ -110,6 +110,8 @@ declare global {
     }
 }
 declare namespace LocalJSX {
+    type OneOf<K extends string, PropT, AttrT = PropT> = { [P in K]: PropT } & { [P in `attr:${K}` | `prop:${K}`]?: never } | { [P in `attr:${K}`]: AttrT } & { [P in K | `prop:${K}`]?: never } | { [P in `prop:${K}`]: PropT } & { [P in K | `attr:${K}`]?: never };
+
     interface CloudtrainChatbot {
         "apiKey": string;
         "avatarUrl"?: string;
@@ -206,15 +208,34 @@ declare namespace LocalJSX {
         "welcomeMessage"?: string;
         "welcomeSubtitle"?: string;
     }
+
+    interface CloudtrainChatbotAttributes {
+        "apiKey": string;
+        "baseUrl": string;
+        "theme": 'light' | 'dark' | 'system';
+        "hideBranding": boolean;
+        "botName": string;
+        "avatarUrl": string;
+        "welcomeMessage": string;
+        "welcomeSubtitle": string;
+        "position": 'bottom-right' | 'bottom-left';
+        "revealDelayMs": number;
+        "defaultOpen": boolean;
+        "persistConversation": boolean;
+        "persistTtlHours": number;
+        "persistStorageKey": string;
+        "requirePreChat": boolean;
+    }
+
     interface IntrinsicElements {
-        "cloudtrain-chatbot": CloudtrainChatbot;
+        "cloudtrain-chatbot": Omit<CloudtrainChatbot, keyof CloudtrainChatbotAttributes> & { [K in keyof CloudtrainChatbot & keyof CloudtrainChatbotAttributes]?: CloudtrainChatbot[K] } & { [K in keyof CloudtrainChatbot & keyof CloudtrainChatbotAttributes as `attr:${K}`]?: CloudtrainChatbotAttributes[K] } & { [K in keyof CloudtrainChatbot & keyof CloudtrainChatbotAttributes as `prop:${K}`]?: CloudtrainChatbot[K] } & OneOf<"apiKey", CloudtrainChatbot["apiKey"], CloudtrainChatbotAttributes["apiKey"]>;
     }
 }
 export { LocalJSX as JSX };
 declare module "@stencil/core" {
     export namespace JSX {
         interface IntrinsicElements {
-            "cloudtrain-chatbot": LocalJSX.CloudtrainChatbot & JSXBase.HTMLAttributes<HTMLCloudtrainChatbotElement>;
+            "cloudtrain-chatbot": LocalJSX.IntrinsicElements["cloudtrain-chatbot"] & JSXBase.HTMLAttributes<HTMLCloudtrainChatbotElement>;
         }
     }
 }
