@@ -12,13 +12,24 @@ Peer dependencies: `react`, `react-native`, `react-native-svg`, `react-native-ma
 
 ### Optional: conversation persistence
 
-To persist conversations across app restarts, also install:
+To persist conversations across app restarts, also install AsyncStorage:
+
+**Expo projects** (use `expo install` to pin the version bundled with your SDK):
+
+```sh
+npx expo install @react-native-async-storage/async-storage
+```
+
+**Bare React Native**:
 
 ```sh
 npm install @react-native-async-storage/async-storage
+cd ios && pod install && cd ..
 ```
 
 Without it, the chatbot still works — conversations just don't survive a restart.
+
+> **Heads up:** on Expo, plain `npm install @react-native-async-storage/async-storage` grabs the latest version, which may be newer than what Expo Go ships. That mismatch produces `AsyncStorageError: Native module is null, cannot access legacy storage` at runtime. Always use `npx expo install` for native-linked modules.
 
 ### Streaming
 
