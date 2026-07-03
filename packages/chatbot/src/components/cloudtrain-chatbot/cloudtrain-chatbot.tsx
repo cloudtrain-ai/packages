@@ -682,7 +682,7 @@ export class CloudTrainChatbot {
                           onInput={(e: Event) =>
                             this.updatePreChatField(field.name, (e.target as HTMLInputElement).value)
                           }
-                          class="px-3 py-2 rounded-md border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
+                          class="h-10 min-h-0 px-3 py-2 rounded-md border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
                         />
                       </label>
                     ))}
