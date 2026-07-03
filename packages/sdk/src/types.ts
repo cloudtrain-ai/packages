@@ -4,13 +4,18 @@ export type Message<T = string> = {
 };
 
 /**
- * OpenAI-compatible response format. Pass `{ type: "json_schema", json_schema: {...} }`
+ * Constrains the model output format. Pass `{ type: "json_schema", json_schema: {...} }`
  * to constrain the model to a JSON Schema; for non-streaming calls the SDK will
  * auto-parse the resulting `content` so callers get a typed object rather than
  * a JSON string. Streaming chunks remain strings — buffer them and parse at the
- * end of the stream.
+ * end of the stream, or use `chatStreamPartial` for progressive partial objects.
  *
- * Note: `json_object` is intentionally not supported (the API rejects it).
+ * Schema requirements when `type === "json_schema"`:
+ * - Root object must set `additionalProperties: false`.
+ * - Every property must be listed in `required` (use a union with `"null"` for
+ *   optional fields rather than omitting from `required`).
+ *
+ * Note: `type: "json_object"` is intentionally not supported.
  */
 export type ResponseFormat =
     | { type: "text" }
