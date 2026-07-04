@@ -147,6 +147,14 @@ export class CloudTrainChatbot {
   @State() private capturedLead: CapturedLead | null = null;
   @State() private preChatValues: CapturedLead = {};
   @State() private preChatError: string | null = null;
+  /**
+   * Server-side conversation identifier. Generated on first mount and
+   * persisted alongside messages so the same conversation resumes across
+   * reloads. Sent with every chat call — the server persists the message
+   * history under this key and returns replies contextualized by it.
+   * Reset (`New chat`) generates a fresh UUID → fresh conversation.
+   */
+  @State() private conversationId: string | null = null;
 
   private messagesRef: HTMLDivElement | null = null;
   private inputRef: HTMLInputElement | null = null;
@@ -191,7 +199,7 @@ export class CloudTrainChatbot {
     return this.persistStorageKey ?? 'cloudtrain-chat';
   }
 
-  private loadPersisted(): { messages: Message[]; lead: CapturedLead | null } | null {
+  private loadPersisted(): { messages: Message[]; lead: CapturedLead | null; conversationId: string | null } | null {
     if (!this.persistConversation || typeof window === 'undefined' || !window.localStorage) {
       return null;
     }
@@ -203,10 +211,10 @@ export class CloudTrainChatbot {
         savedAt?: number;
         messages?: Message[];
         lead?: CapturedLead;
+        conversationId?: string;
       };
-      if ((parsed.v !== 1 && parsed.v !== 2) || !Array.isArray(parsed.messages)) {
-        return null;
-      }
+      if (parsed.v !== 1 && parsed.v !== 2 && parsed.v !== 3) return null;
+      if (!Array.isArray(parsed.messages)) return null;
       if (this.persistTtlHours > 0 && typeof parsed.savedAt === 'number') {
         const ageMs = Date.now() - parsed.savedAt;
         if (ageMs > this.persistTtlHours * 60 * 60 * 1000) {
@@ -214,25 +222,32 @@ export class CloudTrainChatbot {
           return null;
         }
       }
-      const lead = parsed.v === 2 && parsed.lead && typeof parsed.lead === 'object' ? parsed.lead : null;
-      return { messages: parsed.messages, lead };
+      const lead = (parsed.v === 2 || parsed.v === 3) && parsed.lead && typeof parsed.lead === 'object' ? parsed.lead : null;
+      const conversationId = parsed.v === 3 && typeof parsed.conversationId === 'string' ? parsed.conversationId : null;
+      return { messages: parsed.messages, lead, conversationId };
     } catch {
       return null;
     }
   }
 
-  private persist(messages: Message[], lead: CapturedLead | null): void {
+  private persist(messages: Message[], lead: CapturedLead | null, conversationId: string | null): void {
     if (!this.persistConversation || typeof window === 'undefined' || !window.localStorage) {
       return;
     }
     try {
-      if (messages.length === 0 && !lead) {
+      if (messages.length === 0 && !lead && !conversationId) {
         window.localStorage.removeItem(this.storageKey);
         return;
       }
       window.localStorage.setItem(
         this.storageKey,
-        JSON.stringify({ v: 2, savedAt: Date.now(), messages, lead: lead ?? undefined }),
+        JSON.stringify({
+          v: 3,
+          savedAt: Date.now(),
+          messages,
+          lead: lead ?? undefined,
+          conversationId: conversationId ?? undefined,
+        }),
       );
     } catch {
       // Quota exceeded, storage disabled, etc. — fail silently.
@@ -240,7 +255,7 @@ export class CloudTrainChatbot {
   }
 
   private persistMessages(messages: Message[]): void {
-    this.persist(messages, this.capturedLead);
+    this.persist(messages, this.capturedLead, this.conversationId);
   }
 
   private get effectiveMeta(): Record<string, unknown> {
@@ -259,6 +274,13 @@ export class CloudTrainChatbot {
     if (persisted) {
       if (persisted.messages.length > 0) this.messages = persisted.messages;
       if (persisted.lead) this.capturedLead = persisted.lead;
+      this.conversationId = persisted.conversationId;
+    }
+    // Generate a fresh conversation id if we didn't restore one — either no
+    // persisted state, or v1/v2 storage from a pre-channel version. From
+    // this point on the server owns the message history under this key.
+    if (!this.conversationId && typeof crypto !== 'undefined' && crypto.randomUUID) {
+      this.conversationId = crypto.randomUUID();
     }
     if (this.defaultOpen) {
       // Defer to after first render so the open transition plays.
@@ -450,7 +472,13 @@ export class CloudTrainChatbot {
     this.capturedLead = null;
     this.preChatValues = {};
     this.preChatError = null;
-    this.persist([], null);
+    // Rotate the conversation id so the server starts fresh — the old
+    // conversation stays in the DB under the previous key but this widget
+    // won't reference it from this device again.
+    this.conversationId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : null;
+    this.persist([], null, null);
     setTimeout(() => this.inputRef?.focus(), 0);
     this.conversationReset.emit();
   };
@@ -476,7 +504,7 @@ export class CloudTrainChatbot {
     }
     this.capturedLead = captured;
     this.preChatError = null;
-    this.persist(this.messages, captured);
+    this.persist(this.messages, captured, this.conversationId);
     this.leadCaptured.emit(captured);
     setTimeout(() => this.inputRef?.focus(), 50);
   };
@@ -526,6 +554,7 @@ export class CloudTrainChatbot {
       await this.client.chatStream({
         messages,
         meta: this.effectiveMeta,
+        conversation_id: this.conversationId ?? undefined,
         signal: controller.signal,
         onChunk: (chunk) => reveal.feed(chunk),
         onComplete: () => reveal.complete(),

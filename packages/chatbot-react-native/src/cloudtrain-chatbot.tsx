@@ -77,6 +77,23 @@ try {
 } catch {
   asyncStorage = undefined;
 }
+
+/**
+ * RFC 4122 v4 UUID. Uses `crypto.randomUUID` when available (Hermes on
+ * RN 0.74+, Node, browsers); falls back to a Math.random-based generator
+ * for older runtimes. The server treats the id as opaque — collision
+ * risk is negligible (2^122 space) and cross-agent isolation is enforced
+ * by a unique constraint on (connection_id, conversation_id).
+ */
+function generateConversationId(): string {
+  const c: { randomUUID?: () => string } | undefined = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (typeof c?.randomUUID === 'function') return c.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 import { ChatHeader } from './components/chat-header';
 import { ChatBubble, type Message } from './components/chat-bubble';
 import { ChatInput } from './components/chat-input';
@@ -227,6 +244,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   const [capturedLead, setCapturedLead] = useState<CapturedLead | null>(null);
   const [preChatValues, setPreChatValues] = useState<CapturedLead>({});
   const [preChatError, setPreChatError] = useState<string | null>(null);
+  // Server-side conversation identifier. Generated on mount (unless a
+  // persisted one is restored); sent with every chat call. Reset rotates it.
+  const [conversationId, setConversationId] = useState<string | null>(() => generateConversationId());
 
   const effectiveMeta = useMemo(
     () => (capturedLead ? { ...meta, ...capturedLead } : meta),
@@ -271,8 +291,10 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
             savedAt?: number;
             messages?: Message[];
             lead?: CapturedLead;
+            conversationId?: string;
           };
-          if ((parsed.v !== 1 && parsed.v !== 2) || !Array.isArray(parsed.messages)) return;
+          if (parsed.v !== 1 && parsed.v !== 2 && parsed.v !== 3) return;
+          if (!Array.isArray(parsed.messages)) return;
           if (persistTtlHours > 0 && typeof parsed.savedAt === 'number') {
             const ageMs = Date.now() - parsed.savedAt;
             if (ageMs > persistTtlHours * 60 * 60 * 1000) {
@@ -283,8 +305,11 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
           if (parsed.messages.length > 0) {
             setMessages(parsed.messages);
           }
-          if (parsed.v === 2 && parsed.lead && typeof parsed.lead === 'object') {
+          if ((parsed.v === 2 || parsed.v === 3) && parsed.lead && typeof parsed.lead === 'object') {
             setCapturedLead(parsed.lead);
+          }
+          if (parsed.v === 3 && typeof parsed.conversationId === 'string') {
+            setConversationId(parsed.conversationId);
           }
         } catch {
           // Corrupt entry — leave it; next save will overwrite.
@@ -296,18 +321,27 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     };
   }, [persistenceEnabled, storageKey, persistTtlHours]);
 
-  const persist = (msgs: Message[], lead: CapturedLead | null) => {
+  const persist = (msgs: Message[], lead: CapturedLead | null, convId: string | null) => {
     if (!persistenceEnabled || !asyncStorage) return;
-    if (msgs.length === 0 && !lead) {
+    if (msgs.length === 0 && !lead && !convId) {
       asyncStorage.removeItem(storageKey).catch(() => {});
       return;
     }
     asyncStorage
-      .setItem(storageKey, JSON.stringify({ v: 2, savedAt: Date.now(), messages: msgs, lead: lead ?? undefined }))
+      .setItem(
+        storageKey,
+        JSON.stringify({
+          v: 3,
+          savedAt: Date.now(),
+          messages: msgs,
+          lead: lead ?? undefined,
+          conversationId: convId ?? undefined,
+        }),
+      )
       .catch(() => {});
   };
 
-  const persistMessages = (msgs: Message[]) => persist(msgs, capturedLead);
+  const persistMessages = (msgs: Message[]) => persist(msgs, capturedLead, conversationId);
 
   useEffect(() => {
     if (hasOpenedOnce || isOpen) return;
@@ -365,6 +399,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         await client.chatStream({
           messages: apiMessages,
           meta: effectiveMeta,
+          conversation_id: conversationId ?? undefined,
           signal: controller.signal,
           onChunk: (chunk) => reveal.feed(chunk),
           onComplete: () => reveal.complete(),
@@ -372,7 +407,12 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
       } else {
         // Bare RN fallback: non-streaming chat() + feed the full response
         // into StreamReveal so the char-paced animation still plays.
-        const result = await client.chat({ messages: apiMessages, meta: effectiveMeta, signal: controller.signal });
+        const result = await client.chat({
+          messages: apiMessages,
+          meta: effectiveMeta,
+          conversation_id: conversationId ?? undefined,
+          signal: controller.signal,
+        });
         reveal.feed(result.choices[0]?.message?.content ?? '');
         reveal.complete();
       }
@@ -433,7 +473,10 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     setCapturedLead(null);
     setPreChatValues({});
     setPreChatError(null);
-    persist([], null);
+    // Rotate the conversation id so the server starts fresh — the old
+    // conversation stays in the DB but this widget stops referencing it.
+    setConversationId(generateConversationId());
+    persist([], null, null);
     setTimeout(() => inputRef.current?.focus(), 0);
     onConversationReset?.();
   };
@@ -453,7 +496,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     }
     setCapturedLead(captured);
     setPreChatError(null);
-    persist(messages, captured);
+    persist(messages, captured, conversationId);
     onLeadCaptured?.(captured);
     setTimeout(() => inputRef.current?.focus(), 50);
   };

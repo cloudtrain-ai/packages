@@ -62,6 +62,7 @@ export class CloudTrain {
                     stream: false,
                     meta: options.meta,
                     response_format: options.response_format,
+                    conversation_id: options.conversation_id,
                 }),
                 signal,
             });
@@ -126,6 +127,7 @@ export class CloudTrain {
                     stream: true,
                     meta: options.meta,
                     response_format: options.response_format,
+                    conversation_id: options.conversation_id,
                 }),
                 signal,
             });
@@ -232,6 +234,7 @@ export class CloudTrain {
                     stream_format: "partial-json",
                     meta: options.meta,
                     response_format: options.response_format,
+                    conversation_id: options.conversation_id,
                 }),
                 signal,
             });

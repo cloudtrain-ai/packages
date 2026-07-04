@@ -35,6 +35,15 @@ export type ChatOptions = {
     signal?: AbortSignal;
     timeoutMs?: number;
     response_format?: ResponseFormat;
+    /**
+     * Opaque conversation identifier — when supplied, the server persists
+     * the conversation to its own storage and reuses history across requests.
+     * Callers pass the same UUID for each turn to keep context. Omit to run
+     * in stateless mode (server ignores the conversation, uses only the
+     * messages array supplied per-call). CloudTrain-specific extension —
+     * not part of OpenAI's chat.completions contract.
+     */
+    conversation_id?: string;
 };
 
 export type ChatCompletion<T = string> = {
