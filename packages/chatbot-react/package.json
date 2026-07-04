@@ -14,6 +14,19 @@
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./next": {
+      "types": "./dist/types/components/stencil-generated/components.server.d.ts",
+      "import": "./dist/components/stencil-generated/components.server.js",
+      "default": "./dist/components/stencil-generated/components.server.js"
+    },
+    "./package.json": "./package.json"
+  },
   "directories": {
     "lib": "lib",
     "test": "__tests__"
@@ -23,7 +36,7 @@
   ],
   "scripts": {
     "test": "node ./__tests__/cloudtrain-chatbot-react.test.js",
-    "build": "npm run tsc",
+    "build": "rm -rf dist && npm run tsc",
     "tsc": "tsc -p . --outDir ./dist",
     "publish-package": "npm publish --access public"
   },

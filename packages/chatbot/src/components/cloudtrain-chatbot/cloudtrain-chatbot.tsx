@@ -1,4 +1,4 @@
-import { Component, Element, Event, EventEmitter, Host, Prop, State, Watch, h } from '@stencil/core';
+import { Component, Element, Event, EventEmitter, Host, Prop, State, h } from '@stencil/core';
 import { cn } from '../../utils/utils';
 import Button from './/button';
 import X from './x';
@@ -127,12 +127,13 @@ export class CloudTrainChatbot {
   /** Fired when the pre-chat lead form is submitted. Detail: the captured field values. */
   @Event({ eventName: 'leadCaptured' }) leadCaptured!: EventEmitter<CapturedLead>;
 
-  @State() activeTheme: 'light' | 'dark' = 'light';
   @State() private fetchedName: string | null = null;
   @State() private fetchedAvatar: string | null = null;
   @State() private fabAvatarLoaded = false;
 
-  private client!: CloudTrain;
+  private _client?: CloudTrain;
+  private _clientConfig = '';
+  private _agentFetchedFor?: string;
   @State() private isOpen = false;
   @State() private hasOpenedOnce = false;
   @State() private isAtBottom = false;
@@ -163,6 +164,27 @@ export class CloudTrainChatbot {
 
   private getTheme(theme: 'light' | 'dark' | 'system') {
     return theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
+  }
+
+  private get activeTheme(): 'light' | 'dark' {
+    return this.getTheme(this.theme);
+  }
+
+  private get clientConfig(): string {
+    return `${this.apiKey}|${this.baseUrl}`;
+  }
+
+  /**
+   * Built lazily so props that arrive after the component loads — e.g. set
+   * during hydration under SSR — are read at use-time instead of being
+   * captured once in componentWillLoad.
+   */
+  private get client(): CloudTrain {
+    if (!this._client || this._clientConfig !== this.clientConfig) {
+      this._clientConfig = this.clientConfig;
+      this._client = new CloudTrain({ apiKey: this.apiKey, baseUrl: this.baseUrl });
+    }
+    return this._client;
   }
 
   private get storageKey(): string {
@@ -233,13 +255,6 @@ export class CloudTrainChatbot {
   }
 
   componentWillLoad() {
-    this.activeTheme = this.getTheme(this.theme);
-    this.client = new CloudTrain({ apiKey: this.apiKey, baseUrl: this.baseUrl });
-    // Only fetch agent metadata if at least one of name/avatar isn't already
-    // provided via props — the API call is purely to fill in the missing piece.
-    if (!this.botName || !this.avatarUrl) {
-      this.loadAgent();
-    }
     const persisted = this.loadPersisted();
     if (persisted) {
       if (persisted.messages.length > 0) this.messages = persisted.messages;
@@ -250,6 +265,17 @@ export class CloudTrainChatbot {
       setTimeout(() => {
         if (!this.isOpen) this.toggleChat();
       }, 0);
+    }
+  }
+
+  componentWillRender() {
+    // Fetch agent metadata only to fill in whichever of name/avatar isn't
+    // provided via props. Runs before every render (any prop change schedules
+    // one), dirty-checked on the client config, so an apiKey that arrives
+    // after load — e.g. set during SSR hydration — triggers a (re)fetch.
+    if ((!this.botName || !this.avatarUrl) && this.apiKey && this._agentFetchedFor !== this.clientConfig) {
+      this._agentFetchedFor = this.clientConfig;
+      this.loadAgent();
     }
   }
 
@@ -352,11 +378,6 @@ export class CloudTrainChatbot {
       // Endpoint not available (e.g. non-CloudTrain backend) — fall back to props/defaults
     }
   };
-
-  @Watch('theme')
-  watchThemeChange(newValue: 'light' | 'dark' | 'system' = 'system') {
-    this.activeTheme = this.getTheme(newValue);
-  }
 
   @ClickOutside()
   closeOnClickOutside() {
