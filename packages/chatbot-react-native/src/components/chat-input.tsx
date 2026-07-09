@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
-import { SendIcon, StopIcon } from '../icons';
+import { PaperclipIcon, SendIcon, StopIcon } from '../icons';
 import type { Theme } from '../theme';
 
 type Props = {
@@ -10,20 +10,37 @@ type Props = {
   onStop: () => void;
   isStreaming: boolean;
   theme: Theme;
+  /** Overrides derived-from-value send-enabled state (e.g. ready attachments). */
+  canSend?: boolean;
+  onPickFile?: () => void;
+  attachDisabled?: boolean;
 };
 
 export const ChatInput = forwardRef<TextInput, Props>(
-  ({ value, onChange, onSubmit, onStop, isStreaming, theme }, ref) => {
-    const showStop = isStreaming && !value;
-    const canSend = !!value;
+  ({ value, onChange, onSubmit, onStop, isStreaming, theme, canSend, onPickFile, attachDisabled }, ref) => {
+    const derivedCanSend = canSend ?? !!value;
+    const showStop = isStreaming && !derivedCanSend;
 
     return (
       <View style={[styles.container, { borderColor: theme.border, backgroundColor: theme.background }]}>
+        {onPickFile && (
+          <Pressable
+            onPress={onPickFile}
+            disabled={attachDisabled}
+            accessibilityLabel="Attach files"
+            style={({ pressed }) => [
+              styles.attachBtn,
+              { opacity: attachDisabled ? 0.4 : pressed ? 0.7 : 1 },
+            ]}
+          >
+            <PaperclipIcon size={18} color={theme.mutedForeground} />
+          </Pressable>
+        )}
         <TextInput
           ref={ref}
           value={value}
           onChangeText={onChange}
-          onSubmitEditing={() => canSend && onSubmit()}
+          onSubmitEditing={() => derivedCanSend && onSubmit()}
           placeholder="Type your message here..."
           placeholderTextColor={theme.mutedForeground}
           style={[styles.input, { color: theme.foreground }]}
@@ -32,21 +49,21 @@ export const ChatInput = forwardRef<TextInput, Props>(
         />
         <Pressable
           onPress={showStop ? onStop : onSubmit}
-          disabled={!showStop && !canSend}
+          disabled={!showStop && !derivedCanSend}
           accessibilityLabel={showStop ? 'Stop generating' : 'Send message'}
           style={({ pressed }) => [
             styles.button,
             {
               backgroundColor:
-                showStop || canSend ? theme.primary : 'transparent',
-              opacity: pressed ? 0.8 : !showStop && !canSend ? 0.4 : 1,
+                showStop || derivedCanSend ? theme.primary : 'transparent',
+              opacity: pressed ? 0.8 : !showStop && !derivedCanSend ? 0.4 : 1,
             },
           ]}
         >
           {showStop ? (
             <StopIcon size={16} color={theme.primaryForeground} />
           ) : (
-            <SendIcon size={16} color={canSend ? theme.primaryForeground : theme.mutedForeground} />
+            <SendIcon size={16} color={derivedCanSend ? theme.primaryForeground : theme.mutedForeground} />
           )}
         </Pressable>
       </View>
@@ -62,9 +79,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 12,
-    paddingLeft: 16,
+    paddingLeft: 8,
     paddingRight: 6,
     height: 52,
+  },
+  attachBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
   input: { flex: 1, fontSize: 14, paddingVertical: 0 },
   button: {

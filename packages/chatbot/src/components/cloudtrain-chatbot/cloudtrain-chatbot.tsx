@@ -11,10 +11,23 @@ import { marked } from 'marked';
 import { ClickOutside } from 'stencil-click-outside';
 import { CloudTrain, StreamReveal } from '@cloudtrain/sdk';
 
+type MessageAttachment = {
+  name: string;
+  kind: 'image' | 'audio' | 'document';
+};
+
 type Message = {
   content: string;
   role: 'ai' | 'user';
   isError?: boolean;
+  attachments?: MessageAttachment[];
+};
+
+const attachmentKindFromMime = (mime: string): MessageAttachment['kind'] => {
+  const t = mime.toLowerCase();
+  if (t.startsWith('image/')) return 'image';
+  if (t.startsWith('audio/')) return 'audio';
+  return 'document';
 };
 
 export type PreChatField = {
@@ -31,6 +44,35 @@ export type PreChatField = {
 };
 
 export type CapturedLead = Record<string, string>;
+
+type Attachment = {
+  /** Client-side id used for React-key-style tracking before the server assigns one. */
+  localId: string;
+  /** Server-assigned channel_messages.id once upload succeeds. */
+  messageId?: number;
+  file: File;
+  status: 'uploading' | 'ready' | 'error';
+  progress: number;
+  error?: string;
+  abortController?: AbortController;
+};
+
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const ACCEPT_BY_TYPE: Record<string, string> = {
+  image: 'image/*',
+  audio: 'audio/*',
+  document: 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain',
+};
+
+const attachmentAcceptFor = (allowedTypes: string[]): string =>
+  allowedTypes
+    .map((t) => ACCEPT_BY_TYPE[t])
+    .filter(Boolean)
+    .join(',');
+
+const hasAttachableType = (allowedTypes: string[]): boolean =>
+  allowedTypes.some((t) => t in ACCEPT_BY_TYPE);
 
 const chatConfig = {
   dimensions: {
@@ -130,6 +172,7 @@ export class CloudTrainChatbot {
   @State() private fetchedName: string | null = null;
   @State() private fetchedAvatar: string | null = null;
   @State() private fabAvatarLoaded = false;
+  @State() private allowedMediaTypes: string[] = [];
 
   private _client?: CloudTrain;
   private _clientConfig = '';
@@ -155,6 +198,10 @@ export class CloudTrainChatbot {
    * Reset (`New chat`) generates a fresh UUID → fresh conversation.
    */
   @State() private conversationId: string | null = null;
+  @State() private attachments: Attachment[] = [];
+  @State() private attachmentError: string | null = null;
+
+  private fileInputRef: HTMLInputElement | null = null;
 
   private messagesRef: HTMLDivElement | null = null;
   private inputRef: HTMLInputElement | null = null;
@@ -291,11 +338,13 @@ export class CloudTrainChatbot {
   }
 
   componentWillRender() {
-    // Fetch agent metadata only to fill in whichever of name/avatar isn't
-    // provided via props. Runs before every render (any prop change schedules
-    // one), dirty-checked on the client config, so an apiKey that arrives
-    // after load — e.g. set during SSR hydration — triggers a (re)fetch.
-    if ((!this.botName || !this.avatarUrl) && this.apiKey && this._agentFetchedFor !== this.clientConfig) {
+    // Always fetch agent metadata when an apiKey is present — even when
+    // both name and avatar are passed as props — because capabilities
+    // (plan-derived, e.g. which media types are attachable) come from the
+    // same endpoint. Dirty-checked on client config, so an apiKey that
+    // arrives after load — e.g. set during SSR hydration — triggers a
+    // (re)fetch.
+    if (this.apiKey && this._agentFetchedFor !== this.clientConfig) {
       this._agentFetchedFor = this.clientConfig;
       this.loadAgent();
     }
@@ -396,8 +445,11 @@ export class CloudTrainChatbot {
       const agent = await this.client.getAgent();
       this.fetchedName = agent.name;
       this.fetchedAvatar = agent.logo;
+      this.allowedMediaTypes = agent.capabilities.allowed_media_types;
     } catch {
-      // Endpoint not available (e.g. non-CloudTrain backend) — fall back to props/defaults
+      // Endpoint not available (e.g. non-CloudTrain backend) — fall back
+      // to props/defaults. allowedMediaTypes stays empty → attachment
+      // control hidden, which is the safe default.
     }
   };
 
@@ -467,6 +519,11 @@ export class CloudTrainChatbot {
     if (this.isStreaming && this.abortController) {
       this.abortController.abort();
     }
+    for (const att of this.attachments) {
+      att.abortController?.abort();
+    }
+    this.attachments = [];
+    this.attachmentError = null;
     this.messages = [];
     this.input = '';
     this.capturedLead = null;
@@ -513,9 +570,112 @@ export class CloudTrainChatbot {
     if (this.isStreaming) return;
     const lastUserIdx = this.messages.map(m => m.role).lastIndexOf('user');
     if (lastUserIdx === -1) return;
-    const lastUserContent = this.messages[lastUserIdx].content;
+    const last = this.messages[lastUserIdx];
     this.messages = this.messages.slice(0, lastUserIdx);
-    this.sendMessage(lastUserContent);
+    this.sendMessage(last.content, last.attachments);
+  };
+
+  private get hasUploadInFlight(): boolean {
+    return this.attachments.some((a) => a.status === 'uploading');
+  }
+
+  private get hasReadyAttachments(): boolean {
+    return this.attachments.some((a) => a.status === 'ready');
+  }
+
+  private get canSend(): boolean {
+    if (this.hasUploadInFlight) return false;
+    return this.input.trim().length > 0 || this.hasReadyAttachments;
+  }
+
+  private updateAttachment = (localId: string, patch: Partial<Attachment>) => {
+    this.attachments = this.attachments.map((a) => (a.localId === localId ? { ...a, ...patch } : a));
+  };
+
+  private onPickFile = () => {
+    if (this.attachments.length >= MAX_ATTACHMENTS) {
+      this.attachmentError = `You can attach up to ${MAX_ATTACHMENTS} files.`;
+      return;
+    }
+    this.attachmentError = null;
+    this.fileInputRef?.click();
+  };
+
+  private onFilesSelected = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const files = input.files ? Array.from(input.files) : [];
+    // Reset so re-picking the same file after removal still fires change.
+    input.value = '';
+    for (const file of files) {
+      if (this.attachments.length >= MAX_ATTACHMENTS) {
+        this.attachmentError = `You can attach up to ${MAX_ATTACHMENTS} files.`;
+        break;
+      }
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        this.attachmentError = `"${file.name}" exceeds the ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)}MB limit.`;
+        continue;
+      }
+      void this.startUpload(file);
+    }
+  };
+
+  private startUpload = async (file: File) => {
+    const localId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `att_${Date.now()}_${Math.round(performance?.now?.() ?? 0)}`;
+    const abortController = new AbortController();
+    this.attachments = [
+      ...this.attachments,
+      { localId, file, status: 'uploading', progress: 0, abortController },
+    ];
+
+    if (!this.conversationId) {
+      this.updateAttachment(localId, { status: 'error', error: 'No conversation.', abortController: undefined });
+      return;
+    }
+
+    try {
+      const result = await this.client.uploadFile(file, {
+        conversation_id: this.conversationId,
+        signal: abortController.signal,
+        onProgress: (fraction) => this.updateAttachment(localId, { progress: fraction }),
+      });
+      this.updateAttachment(localId, {
+        status: 'ready',
+        progress: 1,
+        messageId: result.message_id,
+        abortController: undefined,
+      });
+    } catch (error) {
+      const isAbort =
+        abortController.signal.aborted ||
+        (error instanceof DOMException && error.name === 'AbortError');
+      if (isAbort) {
+        this.attachments = this.attachments.filter((a) => a.localId !== localId);
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Upload failed.';
+      this.updateAttachment(localId, { status: 'error', error: message, abortController: undefined });
+    }
+  };
+
+  private removeAttachment = async (localId: string) => {
+    const attachment = this.attachments.find((a) => a.localId === localId);
+    if (!attachment) return;
+    if (attachment.status === 'uploading' && attachment.abortController) {
+      // startUpload's catch block removes the entry when the abort fires.
+      attachment.abortController.abort();
+      return;
+    }
+    this.attachments = this.attachments.filter((a) => a.localId !== localId);
+    if (this.attachmentError) this.attachmentError = null;
+    if (attachment.messageId !== undefined) {
+      try {
+        await this.client.deleteUpload(attachment.messageId);
+      } catch {
+        // Storage sweep will collect it; no need to surface to the user.
+      }
+    }
   };
 
   private upsertAiMessage = (content: string) => {
@@ -527,7 +687,7 @@ export class CloudTrainChatbot {
     }
   };
 
-  private sendMessage = async (message: string) => {
+  private sendMessage = async (message: string, attachments?: MessageAttachment[]) => {
     this.abortController = new AbortController();
     const controller = this.abortController;
     const reveal = new StreamReveal({
@@ -542,7 +702,9 @@ export class CloudTrainChatbot {
     try {
       this.isLoading = true;
       this.isStreaming = true;
-      this.messages = [...this.messages, { content: message, role: 'user' }];
+      const userMsg: Message = { content: message, role: 'user' };
+      if (attachments && attachments.length > 0) userMsg.attachments = attachments;
+      this.messages = [...this.messages, userMsg];
       this.scrollToBottom();
       this.messageSent.emit({ text: message });
 
@@ -590,10 +752,22 @@ export class CloudTrainChatbot {
     e.preventDefault();
     if (this.isStreaming && this.abortController) {
       this.abortController.abort();
+      return;
     }
-    const message = this.input;
+    if (!this.canSend) return;
+    const message = this.input.trim();
+    // Snapshot ready attachments for display in the user's bubble. Server-
+    // side they already exist as their own inbound rows under this
+    // conversation, so the AI has them regardless — this is purely so the
+    // user sees a receipt of what they sent alongside their text.
+    const readyAttachments: MessageAttachment[] = this.attachments
+      .filter((a) => a.status === 'ready')
+      .map((a) => ({ name: a.file.name, kind: attachmentKindFromMime(a.file.type) }));
+    if (!message && readyAttachments.length === 0) return;
     this.input = '';
-    this.sendMessage(message);
+    this.attachments = [];
+    this.attachmentError = null;
+    this.sendMessage(message, readyAttachments.length > 0 ? readyAttachments : undefined);
   };
 
   private stopStreaming = () => {
@@ -614,37 +788,104 @@ export class CloudTrainChatbot {
   }
 
   render() {
+    const isStopMode = this.isStreaming && !this.canSend;
+    const attachDisabled = this.attachments.length >= MAX_ATTACHMENTS;
+    const attachEnabled = hasAttachableType(this.allowedMediaTypes);
+    const acceptString = attachmentAcceptFor(this.allowedMediaTypes);
     const inputForm = (
-      <form
-        onSubmit={this.onSubmit}
-        class="w-full relative rounded-lg border bg-background transition-shadow focus-within:ring-2 focus-within:ring-ring/40"
-      >
-        <Input
-          ref={el => (this.inputRef = el ?? null)}
-          value={this.input}
-          onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
-          placeholder="Type your message here..."
-          class="max-h-12 pl-4 pr-14 py-3 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 focus:outline-0"
-        />
-        <Button
-          variant={!this.input && !this.isStreaming ? 'ghost' : 'default'}
-          disabled={!this.input && !this.isStreaming}
-          type={this.isStreaming && !this.input ? 'button' : 'submit'}
-          onClick={this.isStreaming && !this.input ? this.stopStreaming : undefined}
-          aria-label={this.isStreaming && !this.input ? 'Stop generating' : 'Send message'}
-          class="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full transition-colors"
+      <div>
+        {this.attachments.length > 0 && (
+          <div class="flex flex-wrap gap-2 mb-2">
+            {this.attachments.map((att) => (
+              <div
+                key={att.localId}
+                class={cn(
+                  'inline-flex items-center gap-2 rounded-md border bg-muted/40 pl-2 pr-1 py-1 text-xs max-w-[220px]',
+                  att.status === 'error' && 'border-destructive/40 bg-destructive/10',
+                )}
+              >
+                <span class="truncate max-w-[140px]" title={att.file.name}>{att.file.name}</span>
+                {att.status === 'uploading' && (
+                  <span class="text-muted-foreground shrink-0">{Math.round(att.progress * 100)}%</span>
+                )}
+                {att.status === 'error' && (
+                  <span class="text-destructive shrink-0" title={att.error ?? 'Upload failed'}>Failed</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => this.removeAttachment(att.localId)}
+                  aria-label={`Remove ${att.file.name}`}
+                  class="h-4 w-4 flex items-center justify-center rounded-sm text-muted-foreground hover:bg-background/70 hover:text-foreground shrink-0"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {this.attachmentError && (
+          <p class="text-xs text-destructive mb-2" role="alert">{this.attachmentError}</p>
+        )}
+        <form
+          onSubmit={this.onSubmit}
+          class="w-full relative rounded-lg border bg-background transition-shadow focus-within:ring-2 focus-within:ring-ring/40"
         >
-          {this.isStreaming && !this.input ? (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-4">
-              <rect x="6" y="6" width="12" height="12" rx="1.5" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="size-4">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
-            </svg>
+          {attachEnabled && (
+            <input
+              type="file"
+              ref={el => (this.fileInputRef = el ?? null)}
+              multiple
+              accept={acceptString}
+              onChange={this.onFilesSelected}
+              class="hidden"
+              aria-hidden="true"
+              tabindex={-1}
+            />
           )}
-        </Button>
-      </form>
+          {attachEnabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={attachDisabled}
+            onClick={this.onPickFile}
+            aria-label="Attach files"
+            class="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="size-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+            </svg>
+          </Button>
+          )}
+          <Input
+            ref={el => (this.inputRef = el ?? null)}
+            value={this.input}
+            onInput={e => (this.input = (e.target as HTMLTextAreaElement).value)}
+            placeholder="Type your message here..."
+            class={cn(
+              'max-h-12 pr-14 py-3 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50 w-full flex items-center h-16 min-h-12 resize-none rounded-lg border-0 focus:outline-0',
+              attachEnabled ? 'pl-12' : 'pl-4',
+            )}
+          />
+          <Button
+            variant={!this.canSend && !this.isStreaming ? 'ghost' : 'default'}
+            disabled={!this.canSend && !this.isStreaming}
+            type={isStopMode ? 'button' : 'submit'}
+            onClick={isStopMode ? this.stopStreaming : undefined}
+            aria-label={isStopMode ? 'Stop generating' : 'Send message'}
+            class="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full transition-colors"
+          >
+            {isStopMode ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-4">
+                <rect x="6" y="6" width="12" height="12" rx="1.5" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="size-4">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+              </svg>
+            )}
+          </Button>
+        </form>
+      </div>
     );
 
     return (

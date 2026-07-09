@@ -78,6 +78,39 @@ try {
   asyncStorage = undefined;
 }
 
+// Try to use expo-document-picker for the paperclip button. Optional peer
+// dep — if not installed, the paperclip is hidden and attachments aren't
+// exposed in the UI. Host apps that want file attach must install it.
+type DocumentAsset = {
+  uri: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+};
+type DocumentPickerResult =
+  | { canceled: true; assets?: DocumentAsset[] | null }
+  | { canceled: false; assets: DocumentAsset[] }
+  | { type: 'success'; uri: string; name: string; size?: number; mimeType?: string }
+  | { type: 'cancel' };
+type DocumentPickerLike = {
+  getDocumentAsync: (opts?: {
+    type?: string | string[];
+    multiple?: boolean;
+    copyToCacheDirectory?: boolean;
+  }) => Promise<DocumentPickerResult>;
+};
+let documentPicker: DocumentPickerLike | undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const m: any = require('expo-document-picker');
+  const candidate = m?.default ?? m;
+  if (candidate && typeof candidate.getDocumentAsync === 'function') {
+    documentPicker = candidate as DocumentPickerLike;
+  }
+} catch {
+  documentPicker = undefined;
+}
+
 /**
  * RFC 4122 v4 UUID. Uses `crypto.randomUUID` when available (Hermes on
  * RN 0.74+, Node, browsers); falls back to a Math.random-based generator
@@ -95,8 +128,15 @@ function generateConversationId(): string {
   });
 }
 import { ChatHeader } from './components/chat-header';
-import { ChatBubble, type Message } from './components/chat-bubble';
+import { ChatBubble, type Message, type MessageAttachment } from './components/chat-bubble';
 import { ChatInput } from './components/chat-input';
+
+const attachmentKindFromMime = (mime: string): MessageAttachment['kind'] => {
+  const t = mime.toLowerCase();
+  if (t.startsWith('image/')) return 'image';
+  if (t.startsWith('audio/')) return 'audio';
+  return 'document';
+};
 import { ChatIcon } from './icons';
 import { darkTheme, lightTheme, mergeTheme, type Theme } from './theme';
 
@@ -114,6 +154,38 @@ export type PreChatField = {
 };
 
 type CapturedLead = Record<string, string>;
+
+type Attachment = {
+  localId: string;
+  messageId?: number;
+  name: string;
+  size: number;
+  mimeType: string;
+  status: 'uploading' | 'ready' | 'error';
+  progress: number;
+  error?: string;
+  abortController?: AbortController;
+};
+
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+const ACCEPT_BY_TYPE: Record<string, string[]> = {
+  image: ['image/*'],
+  audio: ['audio/*'],
+  document: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+  ],
+};
+
+const acceptFor = (allowedTypes: string[]): string[] =>
+  allowedTypes.flatMap((t) => ACCEPT_BY_TYPE[t] ?? []);
+
+const hasAttachableType = (allowedTypes: string[]): boolean =>
+  allowedTypes.some((t) => t in ACCEPT_BY_TYPE);
 
 export type CloudtrainChatbotProps = {
   apiKey: string;
@@ -247,6 +319,14 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   // Server-side conversation identifier. Generated on mount (unless a
   // persisted one is restored); sent with every chat call. Reset rotates it.
   const [conversationId, setConversationId] = useState<string | null>(() => generateConversationId());
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const conversationIdRef = useRef<string | null>(conversationId);
+  useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+
+  const hasUploadInFlight = attachments.some((a) => a.status === 'uploading');
+  const hasReadyAttachments = attachments.some((a) => a.status === 'ready');
+  const canSend = !hasUploadInFlight && (!!input.trim() || hasReadyAttachments);
 
   const effectiveMeta = useMemo(
     () => (capturedLead ? { ...meta, ...capturedLead } : meta),
@@ -261,11 +341,13 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
 
   const displayName = botName ?? fetched?.name ?? 'AI Assistant';
   const displayAvatar = avatarUrl ?? fetched?.logo ?? null;
+  const allowedMediaTypes = fetched?.capabilities?.allowed_media_types ?? [];
+  const attachEnabled = !!documentPicker && hasAttachableType(allowedMediaTypes);
 
   useEffect(() => {
-    // Only fetch agent metadata if at least one of name/avatar isn't already
-    // provided via props — the API call is purely to fill in the missing piece.
-    if (botName && avatarUrl) return;
+    // Always fetch agent metadata even when name + avatar come from props,
+    // because capabilities (plan-derived, e.g. which media types are
+    // attachable) come from the same endpoint.
     let cancelled = false;
     client
       .getAgent()
@@ -276,7 +358,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     return () => {
       cancelled = true;
     };
-  }, [client, botName, avatarUrl]);
+  }, [client]);
 
   useEffect(() => {
     if (!persistenceEnabled || !asyncStorage) return;
@@ -359,6 +441,126 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   };
 
+  const updateAttachment = (localId: string, patch: Partial<Attachment>) => {
+    setAttachments((prev) => prev.map((a) => (a.localId === localId ? { ...a, ...patch } : a)));
+  };
+
+  const uriToBlob = async (uri: string, mimeType: string | undefined): Promise<Blob> => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const type = mimeType ?? blob.type ?? 'application/octet-stream';
+    // RN's Blob.type is often empty; slice(...) produces a Blob with the desired type.
+    try {
+      return blob.slice(0, blob.size, type);
+    } catch {
+      return blob;
+    }
+  };
+
+  const startUpload = async (asset: DocumentAsset) => {
+    const localId = generateConversationId();
+    const abortController = new AbortController();
+    const size = asset.size ?? 0;
+    const mimeType = asset.mimeType ?? 'application/octet-stream';
+    setAttachments((prev) => [
+      ...prev,
+      { localId, name: asset.name, size, mimeType, status: 'uploading', progress: 0, abortController },
+    ]);
+
+    const convId = conversationIdRef.current;
+    if (!convId) {
+      updateAttachment(localId, { status: 'error', error: 'No conversation.', abortController: undefined });
+      return;
+    }
+
+    try {
+      const blob = await uriToBlob(asset.uri, asset.mimeType);
+      const result = await client.uploadFile(blob, {
+        conversation_id: convId,
+        signal: abortController.signal,
+        onProgress: (fraction) => updateAttachment(localId, { progress: fraction }),
+      });
+      updateAttachment(localId, {
+        status: 'ready',
+        progress: 1,
+        messageId: result.message_id,
+        abortController: undefined,
+      });
+    } catch (error) {
+      const isAbort =
+        abortController.signal.aborted ||
+        (error as { name?: string })?.name === 'AbortError' ||
+        ((error as Error)?.message ?? '').toLowerCase().includes('abort');
+      if (isAbort) {
+        setAttachments((prev) => prev.filter((a) => a.localId !== localId));
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Upload failed.';
+      console.warn('[cloudtrain] upload failed', { name: asset.name, mimeType, size, error });
+      updateAttachment(localId, { status: 'error', error: message, abortController: undefined });
+    }
+  };
+
+  const onPickFile = async () => {
+    if (!documentPicker) {
+      setAttachmentError('File picker not available. Install expo-document-picker.');
+      return;
+    }
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      setAttachmentError(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+      return;
+    }
+    setAttachmentError(null);
+    try {
+      const result = await documentPicker.getDocumentAsync({
+        type: acceptFor(allowedMediaTypes),
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      const assets: DocumentAsset[] = [];
+      if ('assets' in result && result.assets) {
+        if ('canceled' in result && result.canceled) return;
+        assets.push(...result.assets);
+      } else if ('type' in result) {
+        if (result.type === 'cancel') return;
+        assets.push({ uri: result.uri, name: result.name, size: result.size, mimeType: result.mimeType });
+      }
+      let currentCount = attachments.length;
+      for (const asset of assets) {
+        if (currentCount >= MAX_ATTACHMENTS) {
+          setAttachmentError(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+          break;
+        }
+        if ((asset.size ?? 0) > MAX_ATTACHMENT_BYTES) {
+          setAttachmentError(`"${asset.name}" exceeds the ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)}MB limit.`);
+          continue;
+        }
+        currentCount++;
+        void startUpload(asset);
+      }
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : 'Failed to pick file.');
+    }
+  };
+
+  const removeAttachment = async (localId: string) => {
+    const attachment = attachments.find((a) => a.localId === localId);
+    if (!attachment) return;
+    if (attachment.status === 'uploading' && attachment.abortController) {
+      attachment.abortController.abort();
+      return;
+    }
+    setAttachments((prev) => prev.filter((a) => a.localId !== localId));
+    if (attachmentError) setAttachmentError(null);
+    if (attachment.messageId !== undefined) {
+      try {
+        await client.deleteUpload(attachment.messageId);
+      } catch {
+        // Storage sweep will collect it; no need to surface to the user.
+      }
+    }
+  };
+
   const upsertAi = (content: string, isError = false) => {
     setMessages(prev => {
       const last = prev[prev.length - 1];
@@ -369,14 +571,16 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     });
   };
 
-  const sendMessage = async (message: string) => {
-    if (!message.trim()) return;
+  const sendMessage = async (message: string, attachmentsSnapshot?: MessageAttachment[]) => {
+    if (!message.trim() && (!attachmentsSnapshot || attachmentsSnapshot.length === 0)) return;
     const controller = new AbortController();
     abortRef.current = controller;
     try {
       setIsLoading(true);
       setIsStreaming(true);
-      setMessages(prev => [...prev, { role: 'user', content: message }]);
+      const userMsg: Message = { role: 'user', content: message };
+      if (attachmentsSnapshot && attachmentsSnapshot.length > 0) userMsg.attachments = attachmentsSnapshot;
+      setMessages(prev => [...prev, userMsg]);
       scrollToBottom();
       onMessageSent?.({ text: message });
 
@@ -417,9 +621,11 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         reveal.complete();
       }
       await reveal.done;
+      const userPersisted: Message = { role: 'user', content: message };
+      if (attachmentsSnapshot && attachmentsSnapshot.length > 0) userPersisted.attachments = attachmentsSnapshot;
       persistMessages([
         ...messages,
-        { role: 'user', content: message },
+        userPersisted,
         { role: 'ai', content: reveal.text },
       ]);
       onMessageReceived?.({ text: reveal.text });
@@ -447,11 +653,24 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   };
 
   const onSubmit = () => {
-    if (!input) return;
-    if (isStreaming && abortRef.current) abortRef.current.abort();
-    const msg = input;
+    if (isStreaming && abortRef.current) {
+      abortRef.current.abort();
+      return;
+    }
+    if (!canSend) return;
+    const msg = input.trim();
+    // Snapshot ready attachments for display in the user's bubble. Server-
+    // side they already exist as their own inbound rows under this
+    // conversation, so the AI has them regardless — this is purely so the
+    // user sees a receipt of what they sent alongside their text.
+    const readyAttachments: MessageAttachment[] = attachments
+      .filter((a) => a.status === 'ready')
+      .map((a) => ({ name: a.name, kind: attachmentKindFromMime(a.mimeType) }));
+    if (!msg && readyAttachments.length === 0) return;
     setInput('');
-    sendMessage(msg);
+    setAttachments([]);
+    setAttachmentError(null);
+    sendMessage(msg, readyAttachments.length > 0 ? readyAttachments : undefined);
   };
 
   const onStop = () => {
@@ -468,6 +687,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   const confirmReset = () => {
     setConfirmingReset(false);
     if (isStreaming && abortRef.current) abortRef.current.abort();
+    for (const att of attachments) att.abortController?.abort();
+    setAttachments([]);
+    setAttachmentError(null);
     setMessages([]);
     setInput('');
     setCapturedLead(null);
@@ -516,9 +738,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   const retryLastMessage = () => {
     const lastUserIdx = messages.map(m => m.role).lastIndexOf('user');
     if (lastUserIdx === -1) return;
-    const content = messages[lastUserIdx].content;
+    const last = messages[lastUserIdx];
     setMessages(messages.slice(0, lastUserIdx));
-    sendMessage(content);
+    sendMessage(last.content, last.attachments);
   };
 
   const fabPositionStyle = position === 'bottom-left' ? styles.fabLeft : styles.fabRight;
@@ -701,6 +923,47 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
           )}
 
           <View style={styles.inputWrap}>
+            {!isPreChatBlocking && attachments.length > 0 && (
+              <View style={styles.chipRow}>
+                {attachments.map((att) => (
+                  <View
+                    key={att.localId}
+                    style={[
+                      styles.chip,
+                      {
+                        borderColor: att.status === 'error' ? theme.destructive : theme.border,
+                        backgroundColor: att.status === 'error' ? theme.destructive + '1a' : theme.accent + '66',
+                      },
+                    ]}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.chipText, { color: theme.foreground }]}
+                    >
+                      {att.name}
+                    </Text>
+                    {att.status === 'uploading' && (
+                      <Text style={[styles.chipMeta, { color: theme.mutedForeground }]}>
+                        {Math.round(att.progress * 100)}%
+                      </Text>
+                    )}
+                    {att.status === 'error' && (
+                      <Text style={[styles.chipMeta, { color: theme.destructive }]}>Failed</Text>
+                    )}
+                    <Pressable
+                      onPress={() => removeAttachment(att.localId)}
+                      accessibilityLabel={`Remove ${att.name}`}
+                      style={styles.chipRemove}
+                    >
+                      <Text style={[styles.chipRemoveText, { color: theme.mutedForeground }]}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            {!isPreChatBlocking && attachmentError && (
+              <Text style={[styles.attachError, { color: theme.destructive }]}>{attachmentError}</Text>
+            )}
             {!isPreChatBlocking && (
               <ChatInput
                 ref={inputRef}
@@ -710,6 +973,9 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
                 onStop={onStop}
                 isStreaming={isStreaming}
                 theme={theme}
+                canSend={canSend}
+                onPickFile={attachEnabled ? onPickFile : undefined}
+                attachDisabled={attachments.length >= MAX_ATTACHMENTS}
               />
             )}
             {!hideBranding && (
@@ -870,6 +1136,29 @@ const styles = StyleSheet.create({
   messagesScroll: { flex: 1 },
   messagesContent: { padding: 16, gap: 16 },
   inputWrap: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingLeft: 8,
+    paddingRight: 4,
+    paddingVertical: 4,
+    maxWidth: 220,
+  },
+  chipText: { fontSize: 12, flexShrink: 1 },
+  chipMeta: { fontSize: 11 },
+  chipRemove: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+  },
+  chipRemoveText: { fontSize: 16, lineHeight: 16, fontWeight: '600' },
+  attachError: { fontSize: 12 },
   poweredBy: { fontSize: 11, textAlign: 'center', paddingTop: 8, borderTopWidth: 1 },
   confirmOverlay: {
     position: 'absolute',

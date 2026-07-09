@@ -1,4 +1,13 @@
-import type { Agent, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError, ResponseFormat } from "./types";
+import type {
+    Agent,
+    ChatOptions,
+    ChatCompletion,
+    CloudTrainConfig,
+    CloudTrainError,
+    ResponseFormat,
+    Upload,
+    UploadOptions,
+} from "./types";
 
 export class CloudTrainAPIError extends Error {
     readonly status: number;
@@ -300,5 +309,114 @@ export class CloudTrain {
         }
 
         return response.json() as Promise<Agent>;
+    }
+
+    /**
+     * Attach a file to a widget conversation. Runs a three-step presigned
+     * flow — init to reserve a message row and get a signed PUT URL,
+     * upload the bytes directly to object storage (server never sees the
+     * bytes), finalize to trigger transcription / description / extract.
+     *
+     * The next `chat` / `chatStream` call with the same `conversation_id`
+     * will see the attachment in server-side history and use the derived
+     * content (transcription for audio, description for images, extracted
+     * text for documents) as context for the reply.
+     *
+     * Rejects with `CloudTrainAPIError` on any HTTP failure and aborts if
+     * `opts.signal` fires. `opts.onProgress` fires with `0..1` during the
+     * S3 PUT step — the widget uses it to render an upload bar.
+     */
+    async uploadFile(
+        file: Blob,
+        opts: UploadOptions & { onProgress?: (fraction: number) => void },
+    ): Promise<Upload> {
+        const { signal, cleanup } = this.createTimeoutController(opts.signal, opts.timeoutMs ?? this.defaultTimeoutMs);
+        try {
+            const initRes = await this.fetch(`${this.baseUrl}/api/v1/uploads`, {
+                method: "POST",
+                headers: this.headers,
+                body: JSON.stringify({
+                    conversation_id: opts.conversation_id,
+                    mime_type: file.type || "application/octet-stream",
+                    size_bytes: file.size,
+                }),
+                signal,
+            });
+            if (!initRes.ok) {
+                const body = await initRes.json() as CloudTrainError;
+                throw new CloudTrainAPIError(initRes.status, body.error);
+            }
+            const init = await initRes.json() as {
+                message_id: number;
+                upload_url: string;
+                upload_method: "PUT";
+                upload_headers: Record<string, string>;
+                storage_key: string;
+                expires_in: number;
+            };
+
+            const putRes = await this.fetch(init.upload_url, {
+                method: init.upload_method,
+                headers: init.upload_headers,
+                body: file,
+                signal,
+            });
+            if (!putRes.ok) {
+                throw new CloudTrainAPIError(putRes.status, {
+                    message: `Upload PUT failed: ${putRes.status} ${putRes.statusText}`,
+                    type: "upload_error",
+                });
+            }
+            opts.onProgress?.(1);
+
+            const finalizeRes = await this.fetch(`${this.baseUrl}/api/v1/uploads/${init.message_id}`, {
+                method: "POST",
+                headers: this.headers,
+                signal,
+            });
+            if (!finalizeRes.ok) {
+                const body = await finalizeRes.json() as CloudTrainError;
+                throw new CloudTrainAPIError(finalizeRes.status, body.error);
+            }
+            const finalized = await finalizeRes.json() as {
+                message_id: number;
+                type: Upload["type"];
+                mime_type: string;
+                content_available: boolean;
+            };
+
+            return {
+                message_id: finalized.message_id,
+                type: finalized.type,
+                mime_type: finalized.mime_type,
+                size_bytes: file.size,
+            };
+        } finally {
+            cleanup();
+        }
+    }
+
+    /**
+     * Remove an attached file before the user has chatted about it — for
+     * the "remove chip" widget UX. Rejects with 409 if the conversation
+     * has already progressed past this attachment (an assistant reply
+     * has been generated), since deleting would retroactively edit the
+     * context the AI already saw.
+     */
+    async deleteUpload(messageId: number, opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<void> {
+        const { signal, cleanup } = this.createTimeoutController(opts.signal, opts.timeoutMs ?? this.defaultTimeoutMs);
+        try {
+            const response = await this.fetch(`${this.baseUrl}/api/v1/uploads/${messageId}`, {
+                method: "DELETE",
+                headers: this.headers,
+                signal,
+            });
+            if (!response.ok) {
+                const body = await response.json() as CloudTrainError;
+                throw new CloudTrainAPIError(response.status, body.error);
+            }
+        } finally {
+            cleanup();
+        }
     }
 }
