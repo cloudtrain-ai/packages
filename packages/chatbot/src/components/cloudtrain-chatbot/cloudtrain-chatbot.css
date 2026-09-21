@@ -2,17 +2,35 @@
   display: block;
 }
 
+/* A ring that grows out of the button and fades. Transform and opacity
+   only, on a pseudo-element, so the compositor runs it: the earlier
+   box-shadow keyframe re-painted the button on the main thread every frame
+   (Lighthouse: "non-composited animation"). */
 @keyframes ct-fab-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 hsl(var(--cloudtrain-primary) / 0.35);
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
   }
-  50% {
-    box-shadow: 0 0 0 12px hsl(var(--cloudtrain-primary) / 0);
+  70%, 100% {
+    transform: scale(1.45);
+    opacity: 0;
   }
 }
 
-.ct-fab-pulse {
+.ct-fab-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid hsl(var(--cloudtrain-primary) / 0.5);
+  pointer-events: none;
   animation: ct-fab-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-fab-pulse::after {
+    animation: none;
+  }
 }
 
 @keyframes ct-confirm-fade {

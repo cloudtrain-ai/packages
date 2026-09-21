@@ -894,6 +894,13 @@ export class CloudTrainChatbot {
           <div
             ref={el => (this.panelRef = el ?? null)}
             aria-hidden={this.isOpen ? 'false' : 'true'}
+            // Closed, the panel is invisible (opacity 0, no pointer events) but
+            // its close button, input and footer link were still in the tab
+            // order and the accessibility tree - a hidden element with
+            // focusable children, which is what Lighthouse and screen readers
+            // both flag. `inert` takes the whole subtree out of both until it
+            // opens; aria-hidden stays for browsers that predate it.
+            inert={!this.isOpen}
             class={cn(
               'flex flex-col bg-background border sm:rounded-lg shadow-md overflow-hidden transition-all duration-500 ease-out sm:absolute sm:w-[90vw] sm:h-[80vh] fixed inset-0 w-full sm:inset-auto',
               chatConfig.chatPositions[this.position],
@@ -1042,14 +1049,21 @@ export class CloudTrainChatbot {
               </div>
             )}
           </div>
-          <Button
-            variant="default"
-            onClick={this.toggleChat}
+          {/* The pulse lives on a wrapper: the button clips its overflow, and
+              the ring is a pseudo-element outside it animating transform and
+              opacity only - a box-shadow keyframe on the button itself ran on
+              the main thread every frame. */}
+          <div
             class={cn(
-              'w-14 h-14 p-0 rounded-full overflow-hidden items-center justify-center text-message-icon transition-transform duration-200 hover:scale-105 active:scale-95',
+              'relative rounded-full',
               !this.hasOpenedOnce && !this.isOpen && 'ct-fab-pulse',
               this.isOpen ? 'hidden! sm:flex!' : 'flex',
             )}
+          >
+          <Button
+            variant="default"
+            onClick={this.toggleChat}
+            class="relative w-14 h-14 p-0 rounded-full overflow-hidden flex items-center justify-center text-message-icon transition-transform duration-200 hover:scale-105 active:scale-95"
             aria-label={this.isOpen ? 'Close chat' : 'Open chat'}
           >
             {this.isOpen ? (
@@ -1077,6 +1091,7 @@ export class CloudTrainChatbot {
               </div>
             )}
           </Button>
+          </div>
         </div>
       </Host>
     );
