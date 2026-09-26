@@ -44,7 +44,7 @@ const SafePanelView = ({
     </View>
   );
 };
-import { CloudTrain, StreamReveal, type Agent } from '@cloudtrain/sdk';
+import { CloudTrain, StreamReveal, lacksContact, LACKS_CONTACT_MESSAGE, type Agent } from '@cloudtrain/sdk';
 
 // Try to use expo/fetch (streaming-capable) when available — RN's default fetch
 // does not expose `response.body` as a ReadableStream. Falls back gracefully
@@ -216,12 +216,18 @@ export type CloudtrainChatbotProps = {
   onLeadCaptured?: (lead: CapturedLead) => void;
   /**
    * If true, gate the conversation behind a pre-chat form. Captured values
-   * are merged into `meta` so the AI sees the lead's context. Requires
-   * `preChatFields` to be non-empty — otherwise this flag is a no-op.
+   * are merged into `meta` so the AI sees the lead's context. Uses
+   * `preChatFields`, or the dashboard's lead fields when that is empty; with
+   * neither this flag is a no-op.
    */
   requirePreChat?: boolean;
   /**
    * Field configuration for the pre-chat lead-capture form.
+   *
+   * Optional with a CloudTrain API key: left empty, the form uses the lead
+   * fields set in the CloudTrain dashboard (Settings → Lead fields), and asks
+   * for an email or a phone so the lead can be saved. Given, these fields are
+   * used as they are.
    * Example: [{ name: 'email', label: 'Your email', type: 'email-address', required: true }]
    */
   preChatFields?: PreChatField[];
@@ -332,7 +338,20 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     () => (capturedLead ? { ...meta, ...capturedLead } : meta),
     [meta, capturedLead],
   );
-  const isPreChatBlocking = requirePreChat && preChatFields.length > 0 && !capturedLead;
+  // The embed's own fields when it gives any, otherwise the dashboard's.
+  const dashboardFields = useMemo(() => fetched?.lead_fields ?? [], [fetched]);
+  const activePreChatFields = useMemo<PreChatField[]>(
+    () => preChatFields.length > 0
+      ? preChatFields
+      : dashboardFields.map((f) => ({
+        name: f.name,
+        label: f.label,
+        type: f.type === 'email' ? 'email-address' : f.type === 'phone' ? 'phone-pad' : 'default',
+        required: f.required,
+      })),
+    [preChatFields, dashboardFields],
+  );
+  const isPreChatBlocking = requirePreChat && activePreChatFields.length > 0 && !capturedLead;
 
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -704,15 +723,21 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   };
 
   const submitPreChat = () => {
-    const missing = preChatFields
+    const missing = activePreChatFields
       .filter((f) => f.required && !(preChatValues[f.name] ?? '').trim())
       .map((f) => f.label);
     if (missing.length > 0) {
       setPreChatError(`Please fill in: ${missing.join(', ')}`);
       return;
     }
+    // Only for the dashboard's fields: an embed that set its own chose what
+    // to ask, and keeps behaving as it did.
+    if (preChatFields.length === 0 && lacksContact(dashboardFields, preChatValues)) {
+      setPreChatError(LACKS_CONTACT_MESSAGE);
+      return;
+    }
     const captured: CapturedLead = {};
-    for (const field of preChatFields) {
+    for (const field of activePreChatFields) {
       const v = (preChatValues[field.name] ?? '').trim();
       if (v) captured[field.name] = v;
     }
@@ -810,7 +835,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
                   {welcomeSubtitle ?? 'Tell us a bit about you to get started.'}
                 </Text>
                 <View style={styles.preChatFields}>
-                  {preChatFields.map((field) => (
+                  {activePreChatFields.map((field) => (
                     <View key={field.name} style={styles.preChatField}>
                       <Text style={[styles.preChatLabel, { color: theme.foreground }]}>
                         {field.label}

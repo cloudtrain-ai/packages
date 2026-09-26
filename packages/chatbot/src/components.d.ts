@@ -52,12 +52,12 @@ export namespace Components {
          */
         "position": 'bottom-right' | 'bottom-left';
         /**
-          * Field configuration for the pre-chat lead-capture form. Each field renders as an input; required fields must be filled to submit.  Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
+          * Field configuration for the pre-chat lead-capture form. Each field renders as an input; required fields must be filled to submit.  Optional with a CloudTrain API key: left empty, the form uses the lead fields set in the CloudTrain dashboard (Settings → Lead fields), and asks for an email or a phone so the lead can be saved. Given, these fields are used as they are.  Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
           * @default []
          */
         "preChatFields": PreChatField[];
         /**
-          * If true, gate the conversation behind a pre-chat form. Captured values are merged into `meta` so the AI sees the lead's context. Requires `preChatFields` to be non-empty — otherwise this flag is a no-op.
+          * If true, gate the conversation behind a pre-chat form. Captured values are merged into `meta` so the AI sees the lead's context. Uses `preChatFields`, or the dashboard's lead fields when that is empty; with neither this flag is a no-op.
           * @default false
          */
         "requirePreChat": boolean;
@@ -184,12 +184,12 @@ declare namespace LocalJSX {
          */
         "position"?: 'bottom-right' | 'bottom-left';
         /**
-          * Field configuration for the pre-chat lead-capture form. Each field renders as an input; required fields must be filled to submit.  Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
+          * Field configuration for the pre-chat lead-capture form. Each field renders as an input; required fields must be filled to submit.  Optional with a CloudTrain API key: left empty, the form uses the lead fields set in the CloudTrain dashboard (Settings → Lead fields), and asks for an email or a phone so the lead can be saved. Given, these fields are used as they are.  Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
           * @default []
          */
         "preChatFields"?: PreChatField[];
         /**
-          * If true, gate the conversation behind a pre-chat form. Captured values are merged into `meta` so the AI sees the lead's context. Requires `preChatFields` to be non-empty — otherwise this flag is a no-op.
+          * If true, gate the conversation behind a pre-chat form. Captured values are merged into `meta` so the AI sees the lead's context. Uses `preChatFields`, or the dashboard's lead fields when that is empty; with neither this flag is a no-op.
           * @default false
          */
         "requirePreChat"?: boolean;

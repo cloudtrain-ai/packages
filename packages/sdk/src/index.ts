@@ -1,3 +1,4 @@
 export { CloudTrain, CloudTrainAPIError } from "./client";
 export { StreamReveal } from "./stream-reveal";
-export type { Agent, Message, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError, ResponseFormat } from "./types";
+export { lacksContact, LACKS_CONTACT_MESSAGE } from "./leads";
+export type { Agent, LeadField, Message, ChatOptions, ChatCompletion, CloudTrainConfig, CloudTrainError, ResponseFormat } from "./types";

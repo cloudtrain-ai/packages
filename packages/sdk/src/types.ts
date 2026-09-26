@@ -87,10 +87,24 @@ export type AgentCapabilities = {
     allowed_media_types: string[];
 };
 
+/** One field of the agent's pre-chat form, as set in the CloudTrain dashboard. */
+export type LeadField = {
+    /** The key its value is sent under, in the chat request's `meta`. */
+    name: string;
+    label: string;
+    type: "text" | "email" | "phone";
+    required: boolean;
+};
+
 export type Agent = {
     name: string;
     logo: string | null;
     capabilities: AgentCapabilities;
+    /**
+     * What the agent collects before a chat, in order. Absent from servers
+     * older than lead capture; treat that as none.
+     */
+    lead_fields?: LeadField[];
 };
 
 /**

@@ -9,7 +9,7 @@ import ChatHeader from './chat-header';
 import { Input } from './input';
 import { marked } from 'marked';
 import { ClickOutside } from 'stencil-click-outside';
-import { CloudTrain, StreamReveal } from '@cloudtrain/sdk';
+import { CloudTrain, StreamReveal, lacksContact, LACKS_CONTACT_MESSAGE, type LeadField } from '@cloudtrain/sdk';
 
 type MessageAttachment = {
   name: string;
@@ -142,13 +142,19 @@ export class CloudTrainChatbot {
   @Prop() persistStorageKey?: string;
   /**
    * If true, gate the conversation behind a pre-chat form. Captured values
-   * are merged into `meta` so the AI sees the lead's context. Requires
-   * `preChatFields` to be non-empty — otherwise this flag is a no-op.
+   * are merged into `meta` so the AI sees the lead's context. Uses
+   * `preChatFields`, or the dashboard's lead fields when that is empty; with
+   * neither this flag is a no-op.
    */
   @Prop() requirePreChat: boolean = false;
   /**
    * Field configuration for the pre-chat lead-capture form. Each field
    * renders as an input; required fields must be filled to submit.
+   *
+   * Optional with a CloudTrain API key: left empty, the form uses the lead
+   * fields set in the CloudTrain dashboard (Settings → Lead fields), and asks
+   * for an email or a phone so the lead can be saved. Given, these fields are
+   * used as they are.
    *
    * Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
    */
@@ -189,6 +195,8 @@ export class CloudTrainChatbot {
   @State() private confirmingReset = false;
   @State() private capturedLead: CapturedLead | null = null;
   @State() private preChatValues: CapturedLead = {};
+  /** The dashboard's lead fields, from GET /agent. */
+  @State() private fetchedLeadFields: LeadField[] = [];
   @State() private preChatError: string | null = null;
   /**
    * Server-side conversation identifier. Generated on first mount and
@@ -310,9 +318,20 @@ export class CloudTrainChatbot {
     return this.capturedLead ? { ...base, ...this.capturedLead } : base;
   }
 
+  /** The embed's own fields when it gives any, otherwise the dashboard's. */
+  private get activePreChatFields(): PreChatField[] {
+    if (this.preChatFields.length > 0) return this.preChatFields;
+    return this.fetchedLeadFields.map((f) => ({
+      name: f.name,
+      label: f.label,
+      type: f.type === 'phone' ? 'tel' : f.type,
+      required: f.required,
+    }));
+  }
+
   private get isPreChatBlocking(): boolean {
     return this.requirePreChat
-      && this.preChatFields.length > 0
+      && this.activePreChatFields.length > 0
       && !this.capturedLead;
   }
 
@@ -446,6 +465,7 @@ export class CloudTrainChatbot {
       this.fetchedName = agent.name;
       this.fetchedAvatar = agent.logo;
       this.allowedMediaTypes = agent.capabilities.allowed_media_types;
+      this.fetchedLeadFields = agent.lead_fields ?? [];
     } catch {
       // Endpoint not available (e.g. non-CloudTrain backend) — fall back
       // to props/defaults. allowedMediaTypes stays empty → attachment
@@ -547,15 +567,22 @@ export class CloudTrainChatbot {
 
   private submitPreChat = (e: Event) => {
     e.preventDefault();
-    const missing = this.preChatFields
+    const fields = this.activePreChatFields;
+    const missing = fields
       .filter((f) => f.required && !(this.preChatValues[f.name] ?? '').trim())
       .map((f) => f.label);
     if (missing.length > 0) {
       this.preChatError = `Please fill in: ${missing.join(', ')}`;
       return;
     }
+    // Only for the dashboard's fields: an embed that set its own chose what
+    // to ask, and keeps behaving as it did.
+    if (this.preChatFields.length === 0 && lacksContact(this.fetchedLeadFields, this.preChatValues)) {
+      this.preChatError = LACKS_CONTACT_MESSAGE;
+      return;
+    }
     const captured: CapturedLead = {};
-    for (const field of this.preChatFields) {
+    for (const field of fields) {
       const v = (this.preChatValues[field.name] ?? '').trim();
       if (v) captured[field.name] = v;
     }
@@ -965,7 +992,7 @@ export class CloudTrainChatbot {
                     </div>
                   </div>
                   <div class="flex flex-col gap-3">
-                    {this.preChatFields.map((field) => (
+                    {this.activePreChatFields.map((field) => (
                       <label key={field.name} class="flex flex-col gap-1 text-sm">
                         <span class="font-medium">
                           {field.label}
