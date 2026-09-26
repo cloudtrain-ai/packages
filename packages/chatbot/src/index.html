@@ -85,7 +85,6 @@
     api-key="ct_RsDdF52WQVFmJQl6GlLmD5HIUWDrxWpjp2Czntu2As4"
     theme="system"
     hide-branding="false"
-    require-pre-chat="true"
   ></cloudtrain-chatbot>
 
   <script>
@@ -95,11 +94,9 @@
 
     // Configure props that require JS (arrays, objects)
     bot.chatSuggestions = ['What can you do?', 'Pricing', 'Talk to sales'];
-    bot.preChatFields = [
-      { name: 'name', label: 'Your name', required: true },
-      { name: 'email', label: 'Your email', type: 'email', required: true },
-      { name: 'company', label: 'Company', placeholder: 'Optional' },
-    ];
+    // The pre-chat form is set in the CloudTrain dashboard: turn on "Ask for
+    // details before the chat" on the widget, and the fields are the agent's
+    // lead fields.
 
     function push(kind, text) {
       logEntries.unshift({ time: new Date().toLocaleTimeString(), kind, text });

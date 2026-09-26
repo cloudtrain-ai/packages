@@ -137,30 +137,26 @@ Here’s a full example of the chatbot integrated into an HTML page:
 | `persist-conversation` | Boolean | ❌ No | Persist the conversation in `localStorage` so it survives page reloads. Defaults to `true`. Set to `false` to disable. |
 | `persist-ttl-hours` | Number | ❌ No   | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` to keep indefinitely. |
 | `persist-storage-key` | String | ❌ No  | Override the `localStorage` key. Defaults to `cloudtrain-chat`. Set distinct keys if you run multiple chatbots on the same page. |
-| `require-pre-chat` | Boolean | ❌ No  | Gate the conversation behind a pre-chat lead-capture form. No-op unless `preChatFields` is set. Defaults to `false`. |
 
 ### 🔹 Properties (set via JavaScript)
 | Property           | Type       | Description                                   |
 |--------------------|------------|-----------------------------------------------|
 | `chatSuggestions`  | Array      | An array of strings used as chatbot prompts. |
 | `meta`             | Object     | Optional. A custom object sent to the AI model for context. |
-| `preChatFields`    | `PreChatField[]` | Form configuration when `require-pre-chat="true"`. Each field: `{name, label, type?, required?, placeholder?}`. Captured values are merged into `meta` automatically. |
 
 ### 🔹 Pre-Chat Lead Capture
 
-Gate the conversation behind a lead-capture form. The submitted values are merged into `meta` so the AI sees the lead's context on subsequent calls.
+The pre-chat form is set in the CloudTrain dashboard, not in the embed. Turn on **Ask for details before the chat** on the widget (Settings → Widgets), and it asks for the agent's lead fields (Settings → Lead fields). An email or a phone number is always required, and each submission becomes a lead in the dashboard.
+
+The submitted values are also merged into `meta`, so the AI sees who it is talking to.
+
+Listen for `leadCaptured` to run your page's own tracking (a conversion, a pixel) when someone submits the form:
 
 ```html
-<cloudtrain-chatbot api-key="..." require-pre-chat="true" id="bot"></cloudtrain-chatbot>
+<cloudtrain-chatbot api-key="..." id="bot"></cloudtrain-chatbot>
 <script>
-  document.getElementById('bot').preChatFields = [
-    { name: 'name', label: 'Your name', required: true },
-    { name: 'email', label: 'Your email', type: 'email', required: true },
-    { name: 'company', label: 'Company', placeholder: 'Optional' },
-  ];
-
   document.getElementById('bot').addEventListener('leadCaptured', (e) => {
-    console.log('Lead:', e.detail); // { name: '...', email: '...', company: '...' }
+    console.log('Lead:', e.detail); // { name: '...', email: '...' }
   });
 </script>
 ```

@@ -105,6 +105,11 @@ export type Agent = {
      * older than lead capture; treat that as none.
      */
     lead_fields?: LeadField[];
+    /**
+     * Whether the widget asks for `lead_fields` before the chat starts - set
+     * per widget in the CloudTrain dashboard. Absent from older servers.
+     */
+    pre_chat?: boolean;
 };
 
 /**

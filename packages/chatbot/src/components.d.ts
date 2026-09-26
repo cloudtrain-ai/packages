@@ -5,8 +5,8 @@
  * It contains typing information for all components that exist in this project.
  */
 import { HTMLStencilElement, JSXBase } from "@stencil/core/internal";
-import { CapturedLead, PreChatField } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
-export { CapturedLead, PreChatField } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
+import { CapturedLead } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
+export { CapturedLead } from "./components/cloudtrain-chatbot/cloudtrain-chatbot";
 export namespace Components {
     interface CloudtrainChatbot {
         "apiKey": string;
@@ -51,16 +51,6 @@ export namespace Components {
           * @default 'bottom-right'
          */
         "position": 'bottom-right' | 'bottom-left';
-        /**
-          * Field configuration for the pre-chat lead-capture form. Each field renders as an input; required fields must be filled to submit.  Optional with a CloudTrain API key: left empty, the form uses the lead fields set in the CloudTrain dashboard (Settings → Lead fields), and asks for an email or a phone so the lead can be saved. Given, these fields are used as they are.  Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
-          * @default []
-         */
-        "preChatFields": PreChatField[];
-        /**
-          * If true, gate the conversation behind a pre-chat form. Captured values are merged into `meta` so the AI sees the lead's context. Uses `preChatFields`, or the dashboard's lead fields when that is empty; with neither this flag is a no-op.
-          * @default false
-         */
-        "requirePreChat": boolean;
         /**
           * Milliseconds between each character reveal in the streaming animation. `0` (default) shows characters as fast as they arrive from the network. A positive value (e.g. `20`) produces a typewriter effect.
           * @default 0
@@ -154,7 +144,7 @@ declare namespace LocalJSX {
          */
         "onErrorOccurred"?: (event: CloudtrainChatbotCustomEvent<{ message: string }>) => void;
         /**
-          * Fired when the pre-chat lead form is submitted. Detail: the captured field values.
+          * Fired when the visitor submits the pre-chat form. Detail: the values, by lead field name. For the page's own tracking (a conversion, a pixel); the lead itself is saved by CloudTrain with the first message.
          */
         "onLeadCaptured"?: (event: CloudtrainChatbotCustomEvent<CapturedLead>) => void;
         /**
@@ -183,16 +173,6 @@ declare namespace LocalJSX {
           * @default 'bottom-right'
          */
         "position"?: 'bottom-right' | 'bottom-left';
-        /**
-          * Field configuration for the pre-chat lead-capture form. Each field renders as an input; required fields must be filled to submit.  Optional with a CloudTrain API key: left empty, the form uses the lead fields set in the CloudTrain dashboard (Settings → Lead fields), and asks for an email or a phone so the lead can be saved. Given, these fields are used as they are.  Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
-          * @default []
-         */
-        "preChatFields"?: PreChatField[];
-        /**
-          * If true, gate the conversation behind a pre-chat form. Captured values are merged into `meta` so the AI sees the lead's context. Uses `preChatFields`, or the dashboard's lead fields when that is empty; with neither this flag is a no-op.
-          * @default false
-         */
-        "requirePreChat"?: boolean;
         /**
           * Milliseconds between each character reveal in the streaming animation. `0` (default) shows characters as fast as they arrive from the network. A positive value (e.g. `20`) produces a typewriter effect.
           * @default 0
@@ -224,7 +204,6 @@ declare namespace LocalJSX {
         "persistConversation": boolean;
         "persistTtlHours": number;
         "persistStorageKey": string;
-        "requirePreChat": boolean;
     }
 
     interface IntrinsicElements {

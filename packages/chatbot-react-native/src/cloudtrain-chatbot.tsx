@@ -140,17 +140,12 @@ const attachmentKindFromMime = (mime: string): MessageAttachment['kind'] => {
 import { ChatIcon } from './icons';
 import { darkTheme, lightTheme, mergeTheme, type Theme } from './theme';
 
-export type PreChatField = {
-  /** Key used in the captured data + merged into `meta`. */
+/** One input of the pre-chat form, from the agent's lead fields. */
+type PreChatField = {
   name: string;
-  /** Visible label shown above the input. */
   label: string;
-  /** Input type. Defaults to `default`. */
-  type?: 'default' | 'email-address' | 'phone-pad';
-  /** Whether the field must be filled to submit. Defaults to `false`. */
-  required?: boolean;
-  /** Optional placeholder text. */
-  placeholder?: string;
+  type: 'default' | 'email-address' | 'phone-pad';
+  required: boolean;
 };
 
 type CapturedLead = Record<string, string>;
@@ -212,25 +207,14 @@ export type CloudtrainChatbotProps = {
   onMessageReceived?: (event: { text: string }) => void;
   /** Called when the user resets the conversation. */
   onConversationReset?: () => void;
-  /** Called when the user submits the pre-chat form. Receives the captured field values. */
+  /**
+   * Called when the user submits the pre-chat form, with the values by lead
+   * field name. For the app's own analytics; the lead itself is saved by
+   * CloudTrain with the first message. The form is set in the CloudTrain
+   * dashboard: the widget's "Ask for details before the chat", and the
+   * agent's lead fields.
+   */
   onLeadCaptured?: (lead: CapturedLead) => void;
-  /**
-   * If true, gate the conversation behind a pre-chat form. Captured values
-   * are merged into `meta` so the AI sees the lead's context. Uses
-   * `preChatFields`, or the dashboard's lead fields when that is empty; with
-   * neither this flag is a no-op.
-   */
-  requirePreChat?: boolean;
-  /**
-   * Field configuration for the pre-chat lead-capture form.
-   *
-   * Optional with a CloudTrain API key: left empty, the form uses the lead
-   * fields set in the CloudTrain dashboard (Settings → Lead fields), and asks
-   * for an email or a phone so the lead can be saved. Given, these fields are
-   * used as they are.
-   * Example: [{ name: 'email', label: 'Your email', type: 'email-address', required: true }]
-   */
-  preChatFields?: PreChatField[];
   /**
    * Milliseconds between each character reveal in the streaming animation.
    * `0` (default) shows characters as fast as they arrive from the network.
@@ -283,8 +267,6 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     onMessageReceived,
     onConversationReset,
     onLeadCaptured,
-    requirePreChat = false,
-    preChatFields = [],
     revealDelayMs = 0,
     defaultOpen = false,
     persistConversation = true,
@@ -338,20 +320,19 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     () => (capturedLead ? { ...meta, ...capturedLead } : meta),
     [meta, capturedLead],
   );
-  // The embed's own fields when it gives any, otherwise the dashboard's.
-  const dashboardFields = useMemo(() => fetched?.lead_fields ?? [], [fetched]);
-  const activePreChatFields = useMemo<PreChatField[]>(
-    () => preChatFields.length > 0
-      ? preChatFields
-      : dashboardFields.map((f) => ({
-        name: f.name,
-        label: f.label,
-        type: f.type === 'email' ? 'email-address' : f.type === 'phone' ? 'phone-pad' : 'default',
-        required: f.required,
-      })),
-    [preChatFields, dashboardFields],
+  // Both halves set in the CloudTrain dashboard: whether this widget asks
+  // (its own setting) and what (the agent's lead fields).
+  const leadFields = useMemo(() => fetched?.lead_fields ?? [], [fetched]);
+  const preChatFields = useMemo<PreChatField[]>(
+    () => leadFields.map((f) => ({
+      name: f.name,
+      label: f.label,
+      type: f.type === 'email' ? 'email-address' : f.type === 'phone' ? 'phone-pad' : 'default',
+      required: f.required,
+    })),
+    [leadFields],
   );
-  const isPreChatBlocking = requirePreChat && activePreChatFields.length > 0 && !capturedLead;
+  const isPreChatBlocking = !!fetched?.pre_chat && preChatFields.length > 0 && !capturedLead;
 
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -723,21 +704,19 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   };
 
   const submitPreChat = () => {
-    const missing = activePreChatFields
+    const missing = preChatFields
       .filter((f) => f.required && !(preChatValues[f.name] ?? '').trim())
       .map((f) => f.label);
     if (missing.length > 0) {
       setPreChatError(`Please fill in: ${missing.join(', ')}`);
       return;
     }
-    // Only for the dashboard's fields: an embed that set its own chose what
-    // to ask, and keeps behaving as it did.
-    if (preChatFields.length === 0 && lacksContact(dashboardFields, preChatValues)) {
+    if (lacksContact(leadFields, preChatValues)) {
       setPreChatError(LACKS_CONTACT_MESSAGE);
       return;
     }
     const captured: CapturedLead = {};
-    for (const field of activePreChatFields) {
+    for (const field of preChatFields) {
       const v = (preChatValues[field.name] ?? '').trim();
       if (v) captured[field.name] = v;
     }
@@ -835,7 +814,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
                   {welcomeSubtitle ?? 'Tell us a bit about you to get started.'}
                 </Text>
                 <View style={styles.preChatFields}>
-                  {activePreChatFields.map((field) => (
+                  {preChatFields.map((field) => (
                     <View key={field.name} style={styles.preChatField}>
                       <Text style={[styles.preChatLabel, { color: theme.foreground }]}>
                         {field.label}
@@ -847,7 +826,6 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
                           setPreChatValues((prev) => ({ ...prev, [field.name]: text }));
                           if (preChatError) setPreChatError(null);
                         }}
-                        placeholder={field.placeholder}
                         placeholderTextColor={theme.mutedForeground}
                         keyboardType={field.type === 'email-address' ? 'email-address' : field.type === 'phone-pad' ? 'phone-pad' : 'default'}
                         autoCapitalize={field.type === 'email-address' ? 'none' : 'sentences'}

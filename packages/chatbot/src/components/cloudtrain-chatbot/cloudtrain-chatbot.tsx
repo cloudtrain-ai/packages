@@ -30,17 +30,12 @@ const attachmentKindFromMime = (mime: string): MessageAttachment['kind'] => {
   return 'document';
 };
 
-export type PreChatField = {
-  /** Key used in the captured data + merged into `meta`. */
+/** One input of the pre-chat form, from the agent's lead fields. */
+type PreChatField = {
   name: string;
-  /** Visible label shown above/in the input. */
   label: string;
-  /** Input type. Defaults to `text`. */
-  type?: 'text' | 'email' | 'tel';
-  /** Whether the field must be filled to submit. Defaults to `false`. */
-  required?: boolean;
-  /** Optional placeholder text. */
-  placeholder?: string;
+  type: 'text' | 'email' | 'tel';
+  required: boolean;
 };
 
 export type CapturedLead = Record<string, string>;
@@ -140,25 +135,6 @@ export class CloudTrainChatbot {
    * Defaults to `cloudtrain-chat:<apiKey-suffix>` for per-agent isolation.
    */
   @Prop() persistStorageKey?: string;
-  /**
-   * If true, gate the conversation behind a pre-chat form. Captured values
-   * are merged into `meta` so the AI sees the lead's context. Uses
-   * `preChatFields`, or the dashboard's lead fields when that is empty; with
-   * neither this flag is a no-op.
-   */
-  @Prop() requirePreChat: boolean = false;
-  /**
-   * Field configuration for the pre-chat lead-capture form. Each field
-   * renders as an input; required fields must be filled to submit.
-   *
-   * Optional with a CloudTrain API key: left empty, the form uses the lead
-   * fields set in the CloudTrain dashboard (Settings → Lead fields), and asks
-   * for an email or a phone so the lead can be saved. Given, these fields are
-   * used as they are.
-   *
-   * Example: [{ name: 'email', label: 'Your email', type: 'email', required: true }]
-   */
-  @Prop() preChatFields: PreChatField[] = [];
 
   /** Fired when the chat panel opens. */
   @Event({ eventName: 'chatOpened' }) chatOpened!: EventEmitter<void>;
@@ -172,7 +148,11 @@ export class CloudTrainChatbot {
   @Event({ eventName: 'conversationReset' }) conversationReset!: EventEmitter<void>;
   /** Fired when an error happens during send/stream. Detail: error message. */
   @Event({ eventName: 'errorOccurred' }) errorOccurred!: EventEmitter<{ message: string }>;
-  /** Fired when the pre-chat lead form is submitted. Detail: the captured field values. */
+  /**
+   * Fired when the visitor submits the pre-chat form. Detail: the values, by
+   * lead field name. For the page's own tracking (a conversion, a pixel); the
+   * lead itself is saved by CloudTrain with the first message.
+   */
   @Event({ eventName: 'leadCaptured' }) leadCaptured!: EventEmitter<CapturedLead>;
 
   @State() private fetchedName: string | null = null;
@@ -195,8 +175,12 @@ export class CloudTrainChatbot {
   @State() private confirmingReset = false;
   @State() private capturedLead: CapturedLead | null = null;
   @State() private preChatValues: CapturedLead = {};
-  /** The dashboard's lead fields, from GET /agent. */
+  /**
+   * The pre-chat form, both halves set in the CloudTrain dashboard: whether
+   * this widget asks (its own setting) and what (the agent's lead fields).
+   */
   @State() private fetchedLeadFields: LeadField[] = [];
+  @State() private preChatEnabled = false;
   @State() private preChatError: string | null = null;
   /**
    * Server-side conversation identifier. Generated on first mount and
@@ -318,9 +302,7 @@ export class CloudTrainChatbot {
     return this.capturedLead ? { ...base, ...this.capturedLead } : base;
   }
 
-  /** The embed's own fields when it gives any, otherwise the dashboard's. */
-  private get activePreChatFields(): PreChatField[] {
-    if (this.preChatFields.length > 0) return this.preChatFields;
+  private get preChatFields(): PreChatField[] {
     return this.fetchedLeadFields.map((f) => ({
       name: f.name,
       label: f.label,
@@ -330,8 +312,8 @@ export class CloudTrainChatbot {
   }
 
   private get isPreChatBlocking(): boolean {
-    return this.requirePreChat
-      && this.activePreChatFields.length > 0
+    return this.preChatEnabled
+      && this.preChatFields.length > 0
       && !this.capturedLead;
   }
 
@@ -466,6 +448,7 @@ export class CloudTrainChatbot {
       this.fetchedAvatar = agent.logo;
       this.allowedMediaTypes = agent.capabilities.allowed_media_types;
       this.fetchedLeadFields = agent.lead_fields ?? [];
+      this.preChatEnabled = agent.pre_chat ?? false;
     } catch {
       // Endpoint not available (e.g. non-CloudTrain backend) — fall back
       // to props/defaults. allowedMediaTypes stays empty → attachment
@@ -567,7 +550,7 @@ export class CloudTrainChatbot {
 
   private submitPreChat = (e: Event) => {
     e.preventDefault();
-    const fields = this.activePreChatFields;
+    const fields = this.preChatFields;
     const missing = fields
       .filter((f) => f.required && !(this.preChatValues[f.name] ?? '').trim())
       .map((f) => f.label);
@@ -575,9 +558,7 @@ export class CloudTrainChatbot {
       this.preChatError = `Please fill in: ${missing.join(', ')}`;
       return;
     }
-    // Only for the dashboard's fields: an embed that set its own chose what
-    // to ask, and keeps behaving as it did.
-    if (this.preChatFields.length === 0 && lacksContact(this.fetchedLeadFields, this.preChatValues)) {
+    if (lacksContact(this.fetchedLeadFields, this.preChatValues)) {
       this.preChatError = LACKS_CONTACT_MESSAGE;
       return;
     }
@@ -992,18 +973,17 @@ export class CloudTrainChatbot {
                     </div>
                   </div>
                   <div class="flex flex-col gap-3">
-                    {this.activePreChatFields.map((field) => (
+                    {this.preChatFields.map((field) => (
                       <label key={field.name} class="flex flex-col gap-1 text-sm">
                         <span class="font-medium">
                           {field.label}
                           {field.required && <span class="text-destructive ml-1" aria-hidden="true">*</span>}
                         </span>
                         <Input
-                          type={field.type ?? 'text'}
+                          type={field.type}
                           name={field.name}
                           value={this.preChatValues[field.name] ?? ''}
                           required={field.required}
-                          placeholder={field.placeholder}
                           onInput={(e: Event) =>
                             this.updatePreChatField(field.name, (e.target as HTMLInputElement).value)
                           }

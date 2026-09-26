@@ -162,20 +162,18 @@ Props use camelCase, like any React component. (Only when using the raw `<cloudt
 | `persistConversation` | Boolean | ❌ No | Persist the conversation in `localStorage` so it survives page reloads. Defaults to `true`. |
 | `persistTtlHours` | Number | ❌ No  | How long (in hours) to keep a persisted conversation before discarding on next load. Defaults to `168` (7 days). Pass `0` for indefinite. |
 | `persistStorageKey` | String | ❌ No | Override the `localStorage` key. Defaults to `cloudtrain-chat`. Set distinct keys if running multiple chatbots on the same page. |
-| `requirePreChat`  | Boolean | ❌ No | Gate the conversation behind a pre-chat lead-capture form. No-op unless `preChatFields` is set. Defaults to `false`. |
-| `preChatFields`   | `PreChatField[]` | ❌ No | Form fields. Each: `{name, label, type?, required?, placeholder?}`. Captured values are merged into `meta` automatically. |
 
 ### 🔹 Pre-Chat Lead Capture
+
+The pre-chat form is set in the CloudTrain dashboard, not in the embed. Turn on **Ask for details before the chat** on the widget (Settings → Widgets), and it asks for the agent's lead fields (Settings → Lead fields). An email or a phone number is always required, and each submission becomes a lead in the dashboard.
+
+The submitted values are also merged into `meta`, so the AI sees who it is talking to.
+
+`onLeadCaptured` runs when someone submits the form - for your page's own tracking:
 
 ```jsx
 <CloudtrainChatbot
   apiKey="..."
-  requirePreChat={true}
-  preChatFields={[
-    { name: 'name', label: 'Your name', required: true },
-    { name: 'email', label: 'Your email', type: 'email', required: true },
-    { name: 'company', label: 'Company', placeholder: 'Optional' },
-  ]}
   onLeadCaptured={(e) => console.log('Lead:', e.detail)}
 />
 ```
