@@ -44,6 +44,10 @@
     "@cloudtrain/chatbot": "*",
     "@stencil/react-output-target": "~1.6.2"
   },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
   "devDependencies": {
     "typescript": "^6.0.3"
   }
