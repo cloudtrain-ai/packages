@@ -85,7 +85,9 @@ The component renders an absolutely-positioned FAB that opens a full-screen moda
 
 ### Pre-Chat Lead Capture
 
-The pre-chat form is set in the CloudTrain dashboard, not in the embed. Turn on **Ask for details before the chat** on the widget (Settings → Widgets), and it asks for the agent's lead fields (Settings → Lead fields). An email or a phone number is always required, and each submission becomes a lead in the dashboard.
+The pre-chat form is set in the CloudTrain dashboard, not in the embed. Turn on **Ask for details before the chat** on the widget (Settings → Widgets), and it asks for the agent's lead fields (Settings → Lead fields). An email or a phone number is always required, and each submission becomes a lead in the dashboard - saved when the visitor presses Continue, so someone who fills the form in and leaves is still a lead.
+
+A phone field comes with a country picker, preselected from the visitor's country. CloudTrain checks the number (and everything else) when the form is sent, and anything wrong is shown under its field, so no phone library is bundled in the widget.
 
 The submitted values are also merged into `meta`, so the AI sees who it is talking to.
 

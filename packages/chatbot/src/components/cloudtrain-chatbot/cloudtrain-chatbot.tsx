@@ -9,7 +9,7 @@ import ChatHeader from './chat-header';
 import { Input } from './input';
 import { marked } from 'marked';
 import { ClickOutside } from 'stencil-click-outside';
-import { CloudTrain, StreamReveal, lacksContact, LACKS_CONTACT_MESSAGE, type LeadField } from '@cloudtrain/sdk';
+import { CloudTrain, StreamReveal, lacksContact, LACKS_CONTACT_MESSAGE, defaultPhoneCountry, phoneCountriesByName, type LeadField, type SubmitLeadResult } from '@cloudtrain/sdk';
 
 type MessageAttachment = {
   name: string;
@@ -182,6 +182,18 @@ export class CloudTrainChatbot {
   @State() private fetchedLeadFields: LeadField[] = [];
   @State() private preChatEnabled = false;
   @State() private preChatError: string | null = null;
+  /** What the server said is wrong with each field, by name. */
+  @State() private preChatFieldErrors: Record<string, string> = {};
+  @State() private preChatSubmitting = false;
+  /**
+   * The country picked beside a phone field, sent with the number so the
+   * server can read one written without its code. Starts at the visitor's.
+   */
+  @State() private phoneCountry: string | undefined;
+  private _phoneCountries?: ReturnType<typeof phoneCountriesByName>;
+  private get phoneCountries() {
+    return (this._phoneCountries ??= phoneCountriesByName(typeof navigator !== 'undefined' ? navigator.language : undefined));
+  }
   /**
    * Server-side conversation identifier. Generated on first mount and
    * persisted alongside messages so the same conversation resumes across
@@ -449,6 +461,10 @@ export class CloudTrainChatbot {
       this.allowedMediaTypes = agent.capabilities.allowed_media_types;
       this.fetchedLeadFields = agent.lead_fields ?? [];
       this.preChatEnabled = agent.pre_chat ?? false;
+      this.phoneCountry ??= defaultPhoneCountry(
+        agent.visitor_country,
+        typeof navigator !== 'undefined' ? navigator.language : undefined,
+      );
     } catch {
       // Endpoint not available (e.g. non-CloudTrain backend) — fall back
       // to props/defaults. allowedMediaTypes stays empty → attachment
@@ -532,6 +548,7 @@ export class CloudTrainChatbot {
     this.capturedLead = null;
     this.preChatValues = {};
     this.preChatError = null;
+    this.preChatFieldErrors = {};
     // Rotate the conversation id so the server starts fresh — the old
     // conversation stays in the DB under the previous key but this widget
     // won't reference it from this device again.
@@ -546,16 +563,26 @@ export class CloudTrainChatbot {
   private updatePreChatField = (name: string, value: string) => {
     this.preChatValues = { ...this.preChatValues, [name]: value };
     if (this.preChatError) this.preChatError = null;
+    if (this.preChatFieldErrors[name]) {
+      const { [name]: _fixed, ...rest } = this.preChatFieldErrors;
+      this.preChatFieldErrors = rest;
+    }
   };
 
-  private submitPreChat = (e: Event) => {
+  /**
+   * Validation is the server's: the form is posted as a lead, and what it
+   * says is wrong is shown beside each field. Only what needs no rules -
+   * a required field left empty, no way to reach the person - is caught
+   * here first. The lead is saved at this point, not at the first message,
+   * so someone who fills the form in and leaves is still a lead.
+   */
+  private submitPreChat = async (e: Event) => {
     e.preventDefault();
+    if (this.preChatSubmitting) return;
     const fields = this.preChatFields;
-    const missing = fields
-      .filter((f) => f.required && !(this.preChatValues[f.name] ?? '').trim())
-      .map((f) => f.label);
-    if (missing.length > 0) {
-      this.preChatError = `Please fill in: ${missing.join(', ')}`;
+    const empty = fields.filter((f) => f.required && !(this.preChatValues[f.name] ?? '').trim());
+    if (empty.length > 0) {
+      this.preChatFieldErrors = Object.fromEntries(empty.map((f) => [f.name, 'Required.']));
       return;
     }
     if (lacksContact(this.fetchedLeadFields, this.preChatValues)) {
@@ -565,10 +592,35 @@ export class CloudTrainChatbot {
     const captured: CapturedLead = {};
     for (const field of fields) {
       const v = (this.preChatValues[field.name] ?? '').trim();
-      if (v) captured[field.name] = v;
+      if (!v) continue;
+      captured[field.name] = v;
+      // The server reads a number without its code as this country's.
+      if (field.type === 'tel' && this.phoneCountry) captured[`${field.name}_country`] = this.phoneCountry;
     }
+
+    this.preChatSubmitting = true;
+    try {
+      const result = await this.client.submitLead(captured);
+      // Spelled out: this package compiles without strictNullChecks, where
+      // `!result.ok` does not narrow the union.
+      const refused = result.ok ? null : result as Extract<SubmitLeadResult, { ok: false }>;
+      if (refused && refused.code !== 'lead_limit_reached' && refused.status < 500) {
+        // Fixable by the visitor: say where. The business being out of
+        // leads, or the server failing, is not theirs to fix - they chat.
+        this.preChatFieldErrors = refused.fields;
+        this.preChatError = Object.keys(refused.fields).length > 0 ? null : refused.message;
+        return;
+      }
+    } catch {
+      // Unreachable: let them chat. The values still go with the first
+      // message, and the server saves the lead from there.
+    } finally {
+      this.preChatSubmitting = false;
+    }
+
     this.capturedLead = captured;
     this.preChatError = null;
+    this.preChatFieldErrors = {};
     this.persist(this.messages, captured, this.conversationId);
     this.leadCaptured.emit(captured);
     setTimeout(() => this.inputRef?.focus(), 50);
@@ -973,30 +1025,63 @@ export class CloudTrainChatbot {
                     </div>
                   </div>
                   <div class="flex flex-col gap-3">
-                    {this.preChatFields.map((field) => (
-                      <label key={field.name} class="flex flex-col gap-1 text-sm">
-                        <span class="font-medium">
-                          {field.label}
-                          {field.required && <span class="text-destructive ml-1" aria-hidden="true">*</span>}
-                        </span>
+                    {this.preChatFields.map((field) => {
+                      const error = this.preChatFieldErrors[field.name];
+                      const input = (
                         <Input
                           type={field.type}
                           name={field.name}
                           value={this.preChatValues[field.name] ?? ''}
                           required={field.required}
+                          aria-invalid={error ? 'true' : undefined}
+                          disabled={this.preChatSubmitting}
+                          autoComplete={field.type === 'tel' ? 'tel-national' : field.type === 'email' ? 'email' : field.name === 'name' ? 'name' : undefined}
                           onInput={(e: Event) =>
                             this.updatePreChatField(field.name, (e.target as HTMLInputElement).value)
                           }
-                          class="h-10 min-h-0 px-3 py-2 rounded-md border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
+                          class={cn(
+                            'h-10 min-h-0 px-3 py-2 rounded-md border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50',
+                            error && 'border-destructive',
+                          )}
                         />
-                      </label>
-                    ))}
+                      );
+                      return (
+                        <label key={field.name} class="flex flex-col gap-1 text-sm">
+                          <span class="font-medium">
+                            {field.label}
+                            {field.required && <span class="text-destructive ml-1" aria-hidden="true">*</span>}
+                          </span>
+                          {field.type === 'tel' ? (
+                            <div class="flex gap-2">
+                              <select
+                                aria-label="Country"
+                                disabled={this.preChatSubmitting}
+                                onChange={(e: Event) => {
+                                  this.phoneCountry = (e.target as HTMLSelectElement).value || undefined;
+                                  this.updatePreChatField(field.name, this.preChatValues[field.name] ?? '');
+                                }}
+                                class="h-10 w-[5.75rem] shrink-0 rounded-md border bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                              >
+                                {!this.phoneCountry && <option value="" selected>Country</option>}
+                                {this.phoneCountries.map((c) => (
+                                  <option key={c.code} value={c.code} selected={c.code === this.phoneCountry}>
+                                    {`${c.flag} ${c.name} +${c.dial}`}
+                                  </option>
+                                ))}
+                              </select>
+                              {input}
+                            </div>
+                          ) : input}
+                          {error && <span class="text-xs text-destructive" role="alert">{error}</span>}
+                        </label>
+                      );
+                    })}
                     {this.preChatError && (
                       <p class="text-sm text-destructive" role="alert">{this.preChatError}</p>
                     )}
                   </div>
-                  <Button type="submit" variant="default" class="self-stretch h-10 rounded-md">
-                    Continue
+                  <Button type="submit" variant="default" class="self-stretch h-10 rounded-md" disabled={this.preChatSubmitting}>
+                    {this.preChatSubmitting ? 'One moment…' : 'Continue'}
                   </Button>
                 </form>
                 <ChatFooter hideBranding={this.hideBranding} />

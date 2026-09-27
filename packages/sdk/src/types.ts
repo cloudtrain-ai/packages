@@ -60,8 +60,24 @@ export type CloudTrainError = {
     error: {
         message: string;
         type: string;
+        /** A machine-readable reason, where one matters - e.g. "lead_limit_reached". */
+        code?: string;
+        /** What is wrong with each field of a submitted form, by field name. */
+        fields?: Record<string, string>;
     };
 };
+
+/** POST /api/v1/leads's answer: saved, or why not. */
+export type SubmitLeadResult =
+    | { ok: true; id: number; created: boolean }
+    | {
+        ok: false;
+        status: number;
+        message: string;
+        /** What is wrong with each field, by name - show it beside the field. */
+        fields: Record<string, string>;
+        code?: string;
+    };
 
 export type CloudTrainConfig = {
     apiKey: string;
@@ -110,6 +126,11 @@ export type Agent = {
      * per widget in the CloudTrain dashboard. Absent from older servers.
      */
     pre_chat?: boolean;
+    /**
+     * The visitor's country (ISO 3166 alpha-2) as the server saw it, to
+     * preselect a phone field's country picker. Null when unknown.
+     */
+    visitor_country?: string | null;
 };
 
 /**

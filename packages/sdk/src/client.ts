@@ -1,4 +1,5 @@
 import type {
+    SubmitLeadResult,
     Agent,
     ChatOptions,
     ChatCompletion,
@@ -12,12 +13,14 @@ import type {
 export class CloudTrainAPIError extends Error {
     readonly status: number;
     readonly type: string;
+    readonly code?: string;
 
     constructor(status: number, error: CloudTrainError["error"]) {
         super(error.message);
         this.name = "CloudTrainAPIError";
         this.status = status;
         this.type = error.type;
+        this.code = error.code;
     }
 }
 
@@ -292,6 +295,38 @@ export class CloudTrain {
         } finally {
             cleanup();
         }
+    }
+
+    /**
+     * Submit a lead - a pre-chat form, or a site's own form. Values go under
+     * the agent's lead field names (`Agent.lead_fields`); a phone number
+     * written without its country code needs `<field>_country` beside it.
+     *
+     * Resolves either way: a refusal is the form's to show, with what is
+     * wrong with each field. Throws only when the server cannot be reached.
+     */
+    async submitLead(values: Record<string, string>): Promise<SubmitLeadResult> {
+        const response = await this.fetch(`${this.baseUrl}/api/v1/leads`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(values),
+        });
+        const body = await response.json().catch(() => null) as
+            | { id: number; created: boolean }
+            | CloudTrainError
+            | null;
+
+        if (response.ok && body && "id" in body) {
+            return { ok: true, id: body.id, created: body.created };
+        }
+        const error = body && "error" in body ? body.error : undefined;
+        return {
+            ok: false,
+            status: response.status,
+            message: error?.message ?? "Something went wrong. Please try again.",
+            fields: error?.fields ?? {},
+            code: error?.code,
+        };
     }
 
     /**

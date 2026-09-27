@@ -44,7 +44,7 @@ const SafePanelView = ({
     </View>
   );
 };
-import { CloudTrain, StreamReveal, lacksContact, LACKS_CONTACT_MESSAGE, type Agent } from '@cloudtrain/sdk';
+import { CloudTrain, StreamReveal, lacksContact, LACKS_CONTACT_MESSAGE, defaultPhoneCountry, type Agent, type SubmitLeadResult } from '@cloudtrain/sdk';
 
 // Try to use expo/fetch (streaming-capable) when available — RN's default fetch
 // does not expose `response.body` as a ReadableStream. Falls back gracefully
@@ -138,6 +138,7 @@ const attachmentKindFromMime = (mime: string): MessageAttachment['kind'] => {
   return 'document';
 };
 import { ChatIcon } from './icons';
+import { CountryPicker } from './components/country-picker';
 import { darkTheme, lightTheme, mergeTheme, type Theme } from './theme';
 
 /** One input of the pre-chat form, from the agent's lead fields. */
@@ -304,6 +305,11 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
   const [capturedLead, setCapturedLead] = useState<CapturedLead | null>(null);
   const [preChatValues, setPreChatValues] = useState<CapturedLead>({});
   const [preChatError, setPreChatError] = useState<string | null>(null);
+  /** What the server said is wrong with each field, by name. */
+  const [preChatFieldErrors, setPreChatFieldErrors] = useState<Record<string, string>>({});
+  const [preChatSubmitting, setPreChatSubmitting] = useState(false);
+  /** The country beside a phone field; starts at the visitor's once the agent loads. */
+  const [phoneCountry, setPhoneCountry] = useState<string | undefined>();
   // Server-side conversation identifier. Generated on mount (unless a
   // persisted one is restored); sent with every chat call. Reset rotates it.
   const [conversationId, setConversationId] = useState<string | null>(() => generateConversationId());
@@ -695,6 +701,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     setCapturedLead(null);
     setPreChatValues({});
     setPreChatError(null);
+    setPreChatFieldErrors({});
     // Rotate the conversation id so the server starts fresh — the old
     // conversation stays in the DB but this widget stops referencing it.
     setConversationId(generateConversationId());
@@ -703,12 +710,37 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     onConversationReset?.();
   };
 
-  const submitPreChat = () => {
-    const missing = preChatFields
-      .filter((f) => f.required && !(preChatValues[f.name] ?? '').trim())
-      .map((f) => f.label);
-    if (missing.length > 0) {
-      setPreChatError(`Please fill in: ${missing.join(', ')}`);
+  // The visitor's country as the server saw it, else the device's region.
+  useEffect(() => {
+    if (!fetched || phoneCountry) return;
+    let locale: string | undefined;
+    try {
+      locale = Intl.DateTimeFormat().resolvedOptions().locale;
+    } catch {
+      locale = undefined;
+    }
+    setPhoneCountry(defaultPhoneCountry(fetched.visitor_country, locale));
+  }, [fetched, phoneCountry]);
+
+  const clearFieldError = (name: string) =>
+    setPreChatFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const { [name]: _fixed, ...rest } = prev;
+      return rest;
+    });
+
+  /**
+   * Validation is the server's: the form is posted as a lead, and what it
+   * says is wrong is shown under each field. Only a required field left
+   * empty, or no way to reach the person, is caught here first. The lead is
+   * saved now, not at the first message, so someone who fills the form in
+   * and leaves is still a lead.
+   */
+  const submitPreChat = async () => {
+    if (preChatSubmitting) return;
+    const empty = preChatFields.filter((f) => f.required && !(preChatValues[f.name] ?? '').trim());
+    if (empty.length > 0) {
+      setPreChatFieldErrors(Object.fromEntries(empty.map((f) => [f.name, 'Required.'])));
       return;
     }
     if (lacksContact(leadFields, preChatValues)) {
@@ -718,10 +750,33 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
     const captured: CapturedLead = {};
     for (const field of preChatFields) {
       const v = (preChatValues[field.name] ?? '').trim();
-      if (v) captured[field.name] = v;
+      if (!v) continue;
+      captured[field.name] = v;
+      // The server reads a number without its code as this country's.
+      if (field.type === 'phone-pad' && phoneCountry) captured[`${field.name}_country`] = phoneCountry;
     }
+
+    setPreChatSubmitting(true);
+    try {
+      const result = await client.submitLead(captured);
+      const refused = result.ok ? null : result as Extract<SubmitLeadResult, { ok: false }>;
+      if (refused && refused.code !== 'lead_limit_reached' && refused.status < 500) {
+        // Fixable by the visitor: say where. The business being out of
+        // leads, or the server failing, is not theirs to fix - they chat.
+        setPreChatFieldErrors(refused.fields);
+        setPreChatError(Object.keys(refused.fields).length > 0 ? null : refused.message);
+        return;
+      }
+    } catch {
+      // Unreachable: let them chat. The values still go with the first
+      // message, and the server saves the lead from there.
+    } finally {
+      setPreChatSubmitting(false);
+    }
+
     setCapturedLead(captured);
     setPreChatError(null);
+    setPreChatFieldErrors({});
     persist(messages, captured, conversationId);
     onLeadCaptured?.(captured);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -814,44 +869,73 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
                   {welcomeSubtitle ?? 'Tell us a bit about you to get started.'}
                 </Text>
                 <View style={styles.preChatFields}>
-                  {preChatFields.map((field) => (
-                    <View key={field.name} style={styles.preChatField}>
-                      <Text style={[styles.preChatLabel, { color: theme.foreground }]}>
-                        {field.label}
-                        {field.required ? <Text style={{ color: theme.destructive }}> *</Text> : null}
-                      </Text>
+                  {preChatFields.map((field) => {
+                    const error = preChatFieldErrors[field.name];
+                    const input = (
                       <TextInput
                         value={preChatValues[field.name] ?? ''}
                         onChangeText={(text) => {
                           setPreChatValues((prev) => ({ ...prev, [field.name]: text }));
                           if (preChatError) setPreChatError(null);
+                          clearFieldError(field.name);
                         }}
+                        editable={!preChatSubmitting}
                         placeholderTextColor={theme.mutedForeground}
                         keyboardType={field.type === 'email-address' ? 'email-address' : field.type === 'phone-pad' ? 'phone-pad' : 'default'}
                         autoCapitalize={field.type === 'email-address' ? 'none' : 'sentences'}
+                        textContentType={field.type === 'phone-pad' ? 'telephoneNumber' : field.type === 'email-address' ? 'emailAddress' : field.name === 'name' ? 'name' : undefined}
                         style={[
                           styles.preChatInput,
+                          field.type === 'phone-pad' && styles.preChatPhoneInput,
                           {
                             color: theme.foreground,
-                            borderColor: theme.border,
+                            borderColor: error ? theme.destructive : theme.border,
                             backgroundColor: theme.background,
                           },
                         ]}
                       />
-                    </View>
-                  ))}
+                    );
+                    return (
+                      <View key={field.name} style={styles.preChatField}>
+                        <Text style={[styles.preChatLabel, { color: theme.foreground }]}>
+                          {field.label}
+                          {field.required ? <Text style={{ color: theme.destructive }}> *</Text> : null}
+                        </Text>
+                        {field.type === 'phone-pad' ? (
+                          <View style={styles.preChatPhoneRow}>
+                            <CountryPicker
+                              value={phoneCountry}
+                              onChange={(code) => {
+                                setPhoneCountry(code);
+                                clearFieldError(field.name);
+                              }}
+                              theme={theme}
+                              disabled={preChatSubmitting}
+                            />
+                            {input}
+                          </View>
+                        ) : input}
+                        {error ? (
+                          <Text style={[styles.preChatFieldError, { color: theme.destructive }]}>{error}</Text>
+                        ) : null}
+                      </View>
+                    );
+                  })}
                   {preChatError && (
                     <Text style={[styles.preChatError, { color: theme.destructive }]}>{preChatError}</Text>
                   )}
                 </View>
                 <Pressable
                   onPress={submitPreChat}
+                  disabled={preChatSubmitting}
                   style={({ pressed }) => [
                     styles.preChatSubmit,
-                    { backgroundColor: pressed ? theme.primary + 'd9' : theme.primary },
+                    { backgroundColor: pressed || preChatSubmitting ? theme.primary + 'd9' : theme.primary },
                   ]}
                 >
-                  <Text style={[styles.preChatSubmitText, { color: theme.primaryForeground }]}>Continue</Text>
+                  <Text style={[styles.preChatSubmitText, { color: theme.primaryForeground }]}>
+                    {preChatSubmitting ? 'One moment…' : 'Continue'}
+                  </Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -1107,6 +1191,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     fontSize: 14,
+  },
+  preChatPhoneRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  preChatPhoneInput: {
+    flex: 1,
+  },
+  preChatFieldError: {
+    fontSize: 12,
   },
   preChatError: {
     fontSize: 13,
