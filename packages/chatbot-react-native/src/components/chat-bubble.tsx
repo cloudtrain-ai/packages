@@ -17,6 +17,8 @@ export type Message = {
   role: 'ai' | 'user';
   isError?: boolean;
   attachments?: MessageAttachment[];
+  /** Answers the visitor can tap instead of type - the times a booking offered. */
+  quickReplies?: string[];
 };
 
 const AttachmentIcon = ({ kind, color }: { kind: MessageAttachment['kind']; color: string }) => {

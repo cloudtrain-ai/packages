@@ -117,6 +117,12 @@ export class CloudTrain {
      * the buffered content auto-parsed as `T`. For text streams, `onComplete`
      * receives the joined string.
      *
+     * With `onQuickReplies` (and a `conversation_id`), the reply streams as
+     * server-sent events instead of bare text: `onChunk` still gets the text
+     * as it is written, and `onQuickReplies` fires once, after the text, with
+     * the answers the visitor can tap - the times a booking offered. It does
+     * not fire when there are none.
+     *
      * Resolves when the stream completes naturally. Rejects with
      * `CloudTrainAPIError` on HTTP errors or `DOMException("AbortError")` when
      * aborted via signal/timeout. `onError` is also invoked for consumers that
@@ -127,9 +133,13 @@ export class CloudTrain {
             onChunk: (chunk: string) => void;
             onComplete?: (result: T) => void;
             onError?: (err: unknown) => void;
+            onQuickReplies?: (replies: string[]) => void;
         },
     ): Promise<void> {
         const { signal, cleanup, clearTimeoutOnly } = this.createTimeoutController(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
+        // Events only when someone will read the quick replies: a caller that
+        // does not gets the bare text stream it always had.
+        const events = Boolean(options.onQuickReplies);
         try {
             const response = await this.fetch(`${this.baseUrl}/api/v1/chat/completions`, {
                 method: "POST",
@@ -137,6 +147,7 @@ export class CloudTrain {
                 body: JSON.stringify({
                     messages: options.messages,
                     stream: true,
+                    ...(events ? { stream_format: "events" } : {}),
                     meta: options.meta,
                     response_format: options.response_format,
                     conversation_id: options.conversation_id,
@@ -159,14 +170,38 @@ export class CloudTrain {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
+            // Events: frames of `data: {...}`, split on the blank line between them.
+            let pending = "";
+            const readFrames = (flush: boolean) => {
+                let sep: number;
+                while ((sep = pending.indexOf("\n\n")) !== -1 || (flush && pending.trim())) {
+                    const frame = sep === -1 ? pending : pending.slice(0, sep);
+                    pending = sep === -1 ? "" : pending.slice(sep + 2);
+                    const line = frame.split("\n").find(l => l.startsWith("data:"));
+                    const payload = line?.slice(5).trimStart();
+                    if (!payload || payload === "[DONE]") continue;
+                    const event = JSON.parse(payload) as { text?: string; quick_replies?: string[] };
+                    if (event.text) {
+                        buffer += event.text;
+                        options.onChunk(event.text);
+                    }
+                    if (event.quick_replies?.length) options.onQuickReplies?.(event.quick_replies);
+                }
+            };
             try {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     const chunk = decoder.decode(value, { stream: true });
-                    buffer += chunk;
-                    options.onChunk(chunk);
+                    if (events) {
+                        pending += chunk;
+                        readFrames(false);
+                    } else {
+                        buffer += chunk;
+                        options.onChunk(chunk);
+                    }
                 }
+                if (events) readFrames(true);
             } finally {
                 reader.releaseLock();
             }

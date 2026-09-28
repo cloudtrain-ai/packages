@@ -605,6 +605,7 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         },
       });
 
+      let quickReplies: string[] = [];
       if (streamingFetch) {
         await client.chatStream({
           messages: apiMessages,
@@ -613,6 +614,8 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
           signal: controller.signal,
           onChunk: (chunk) => reveal.feed(chunk),
           onComplete: () => reveal.complete(),
+          // Only a conversation the server keeps can have them.
+          ...(conversationId ? { onQuickReplies: (replies: string[]) => { quickReplies = replies; } } : {}),
         });
       } else {
         // Bare RN fallback: non-streaming chat() + feed the full response
@@ -625,14 +628,23 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
         });
         reveal.feed(result.choices[0]?.message?.content ?? '');
         reveal.complete();
+        quickReplies = result.choices[0]?.message?.quick_replies ?? [];
       }
       await reveal.done;
+      // Put on the reply once it is all shown, so the buttons never appear
+      // under half a sentence.
+      if (quickReplies.length) {
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          return last?.role === 'ai' ? [...prev.slice(0, -1), { ...last, quickReplies }] : prev;
+        });
+      }
       const userPersisted: Message = { role: 'user', content: message };
       if (attachmentsSnapshot && attachmentsSnapshot.length > 0) userPersisted.attachments = attachmentsSnapshot;
       persistMessages([
         ...messages,
         userPersisted,
-        { role: 'ai', content: reveal.text },
+        { role: 'ai', content: reveal.text, ...(quickReplies.length ? { quickReplies } : {}) },
       ]);
       onMessageReceived?.({ text: reveal.text });
     } catch (error) {
@@ -998,6 +1010,24 @@ export const CloudtrainChatbot = (props: CloudtrainChatbotProps) => {
                   onRetry={idx === messages.length - 1 && m.isError ? retryLastMessage : undefined}
                 />
               ))}
+              {/* The latest reply's only: an older one's times are no longer the question. */}
+              {!isStreaming && (messages[messages.length - 1]?.quickReplies?.length ?? 0) > 0 && (
+                <View style={styles.quickReplies} accessibilityRole="menu" accessibilityLabel="Quick replies">
+                  {messages[messages.length - 1]!.quickReplies!.map((reply) => (
+                    <Pressable
+                      key={reply}
+                      onPress={() => sendMessage(reply)}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [
+                        styles.suggestion,
+                        { borderColor: theme.border, backgroundColor: pressed ? theme.accent : theme.accent + '66' },
+                      ]}
+                    >
+                      <Text style={[styles.suggestionText, { color: theme.foreground }]}>{reply}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
               {isLoading && (
                 <ChatBubble
                   message={{ content: '', role: 'ai' }}
@@ -1228,6 +1258,7 @@ const styles = StyleSheet.create({
   welcome: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
   welcomeSub: { fontSize: 13, textAlign: 'center', marginTop: -8 },
   suggestionsRow: { gap: 8, paddingHorizontal: 8, marginTop: 8, alignItems: 'center' },
+  quickReplies: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingLeft: 40, marginTop: -8 },
   suggestion: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
   suggestionText: { fontSize: 13, fontWeight: '500' },
   messagesScroll: { flex: 1 },

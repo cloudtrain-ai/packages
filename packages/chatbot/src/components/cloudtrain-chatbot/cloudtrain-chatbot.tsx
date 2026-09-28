@@ -21,6 +21,8 @@ type Message = {
   role: 'ai' | 'user';
   isError?: boolean;
   attachments?: MessageAttachment[];
+  /** Answers the visitor can tap instead of type - the times a booking offered. */
+  quickReplies?: string[];
 };
 
 const attachmentKindFromMime = (mime: string): MessageAttachment['kind'] => {
@@ -773,6 +775,7 @@ export class CloudTrainChatbot {
         content: m.content,
       }));
 
+      let quickReplies: string[] = [];
       await this.client.chatStream({
         messages,
         meta: this.effectiveMeta,
@@ -780,8 +783,17 @@ export class CloudTrainChatbot {
         signal: controller.signal,
         onChunk: (chunk) => reveal.feed(chunk),
         onComplete: () => reveal.complete(),
+        // Only a conversation the server keeps can have them.
+        ...(this.conversationId ? { onQuickReplies: (replies: string[]) => { quickReplies = replies; } } : {}),
       });
       await reveal.done;
+      // Put on the reply once it is all shown, so the buttons never appear
+      // under half a sentence.
+      const reply = this.messages[this.messages.length - 1];
+      if (quickReplies.length && reply?.role === 'ai') {
+        this.messages = [...this.messages.slice(0, -1), { ...reply, quickReplies }];
+        this.scrollToBottom();
+      }
       this.announcement = reveal.text;
       this.persistMessages(this.messages);
       this.messageReceived.emit({ text: reveal.text });
@@ -981,6 +993,21 @@ export class CloudTrainChatbot {
                   {this.messages.map((message, idx) => (
                     <ChatBubble message={message} onRetry={idx === this.messages.length - 1 ? this.retryLastMessage : undefined} />
                   ))}
+                  {/* The latest reply's only: an older one's times are no longer the question. */}
+                  {!this.isStreaming && (this.messages[this.messages.length - 1]?.quickReplies?.length ?? 0) > 0 && (
+                    <div class="flex flex-wrap gap-2 -mt-3 pl-10" role="group" aria-label="Quick replies">
+                      {this.messages[this.messages.length - 1].quickReplies!.map((reply) => (
+                        <Button
+                          variant="outline"
+                          key={reply}
+                          onClick={() => this.startChatWithSuggestion(reply)}
+                          class="rounded-full px-3 h-8 text-sm border-border bg-accent/40 hover:bg-accent transition-colors"
+                        >
+                          {reply}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                   {this.isLoading && (
                     <ChatBubble
                       message={{
