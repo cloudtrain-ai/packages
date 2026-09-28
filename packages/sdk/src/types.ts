@@ -51,7 +51,16 @@ export type ChatCompletion<T = string> = {
     object: "chat.completion";
     choices: {
         index: number;
-        message: Message<T>;
+        message: Message<T> & {
+            /**
+             * Answers the visitor can tap instead of type - the times a
+             * booking offered. Sending one as the next user message is the
+             * same as typing it. Only on a widget conversation
+             * (`conversation_id`), and only when there are some.
+             * CloudTrain-specific extension.
+             */
+            quick_replies?: string[];
+        };
         finish_reason: string;
     }[];
 };
